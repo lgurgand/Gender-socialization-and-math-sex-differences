@@ -1,0 +1,1086 @@
+---
+title: "Création database"
+output: html_document
+date: '2023-04-09'
+---
+
+#Setup
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+#1/ Libraries:
+
+```{r, warning=FALSE}
+library(haven)
+library(sas7bdat)
+library(dplyr)
+library(psych)
+library(ggplot2)
+library(viridis)
+library(hrbrthemes)
+library(forcats)
+library(frequency)
+library(corrplot)
+library(effsize)
+library(kableExtra)
+library(vcd)
+```
+
+#2/ Importation database
+
+```{r}
+
+data1 <- read_sas("20230217Dem768_511_HP/data_dem768_511_hp.sas7bdat")
+
+# Import school scores
+school <- read.csv("scoreschool")
+school <- school %>% select(-X)
+
+# Only keeping the 6825 children with at least one school score 
+data1 <- semi_join(data1, school, by = "id_Dem768_511_HP")
+
+# Removing homosexual couples
+
+dataEQR12 <- read_sas("20230217Dem768_511_HP/eqr12.sas7bdat")
+dataEQR12 <- semi_join(dataEQR12, school, by = "id_Dem768_511_HP")
+
+
+id_homosex <- dataEQR12 %>%
+  filter(samesex_2m == 1 | samesex_1y == 1 | samesex_2y == 1 | samesex_3y == 1 | samesex_5y == 1) %>%
+  pull(id_Dem768_511_HP)
+
+data1 <- data1 %>%
+  filter(!(id_Dem768_511_HP %in% id_homosex))
+
+dataEQR12 <- dataEQR12 %>%
+  filter(!(id_Dem768_511_HP %in% id_homosex))
+
+school <- school %>%
+  filter(!(id_Dem768_511_HP %in% id_homosex))
+
+```
+
+#3/ Dataframes at each age:
+
+```{r}
+### DATAFRAME at 3.5 year :
+#Attention ! A 3.5 ans, les variables sont codées selon le "référent" (A03R_ vs A03R2_)
+
+df3A <- data1 %>% select(id_Dem768_511_HP, c(starts_with(c("A03R","A03X")) ))
+df3A <- df3A %>% select(-starts_with(c("A03R_CONFIG","A03R_NOI", "A03R_SEXE_", "A03R_ANAIS", "A03R_AGE_", "A03R_DIFFAGE", "A03R_ADATDEPART","A03R_TYPOLOG_", "A03R_TYPOLOGCO", "A03R_SCOLARITE", "A03R_DIPLOM1E_", "A03R_DIPLOM2E", "A03R_DIPLOM3E", "A03R_DIPLOM4E", "A03R_ROEC", "A03R_RANGR", "A03R_TELER", "A03R_STPR", "A03R_CDI", "A03R_CONGMATPAR", "A03R_SITUAE",
+                                       "A03R2_CONFIG","A03R2_NOI", "A03R2_SEXE_", "A03R2_ANAIS", "A03R2_AGE_", "A03R2_DIFFAGE", "A03R2_ADATDEPART", "A03R2_TYPOLOG_", "A03R2_TYPOLOGCO", "A03R2_SCOLARITE", "A03R2_DIPLOM1E_", "A03R2_DIPLOM2E", "A03R2_DIPLOM3E", "A03R2_DIPLOM4E", "A03R2_ROEC", "A03R2_RANGR","A03R2_TELER", "A03R2_STPR", "A03R2_CDI","A03R2_CONGMATPAR", "A03R2_SITUAE")))
+
+            
+df3A <- df3A %>% select(-A03R_CONTREF3A, -A03R_ENFVOIPAR, -A03R_MREFCOMP3A, -A03R_PREFCOMP3A, -A03R_REFCOMP3A,-A03R_TECLASEC, -A03R_QGARD4, -A03R_QGARD5, -A03R_QGARD6, -A03R_QGARD7, -A03R_QGARD8, -A03R_QGARD9, -A03R_QGARD10, -A03R_GARDENFP, -A03R_ACME, -A03R_AIMMA, -A03R_AIMCOP, -A03R_MARCHEC, -A03R_EMECO4, -A03R_EMECO5, -A03R_EMECO6, -A03R_EMECO7, -A03R_EMECO8, -A03R_EMECO9, -A03R_EMECO10, -A03R_EMECO11, -A03R_EMECO10P, -A03R_CHECO4, -A03R_CHECO5, -A03R_CHECO6, -A03R_CHECO8, -A03R_CHECO9, -A03R_CHECO10, -A03R_CHECO11, -A03R_CHECO10P, -A03R_DISTRA, -A03R_NYIENTP, -A03R_AMBCALM, -A03R_BAZAR,
+                          
+                        -A03R2_ENFVOIPAR, -A03R2_TECLASEC, -A03R2_QGARD4, -A03R2_QGARD5, -A03R2_QGARD6, -A03R2_QGARD7, -A03R2_QGARD8, -A03R2_QGARD9, -A03R2_QGARD10, -A03R2_GARDENFP, -A03R2_ACME, -A03R2_AIMMA, -A03R2_AIMCOP, -A03R2_MARCHEC, -A03R2_EMECO4, -A03R2_EMECO5, -A03R2_EMECO6, -A03R2_EMECO7, -A03R2_EMECO8, -A03R2_EMECO9, -A03R2_EMECO10, -A03R2_EMECO11, -A03R2_EMECO10P, -A03R2_CHECO4, -A03R2_CHECO5, -A03R2_CHECO6, -A03R2_CHECO8, -A03R2_CHECO9, -A03R2_CHECO10, -A03R2_CHECO11, -A03R2_CHECO10P, -A03R2_DISTRA, -A03R2_NYIENTP, -A03R2_AMBCALM, -A03R2_BAZAR,
+                        
+                        A03R_TOTREVEN, A03R2_TOTREVEN, A03R_TOTREVENT, A03R2_TOTREVENT)
+
+### DATAFRAME at 5.5 years :
+
+
+df5A <- data1 %>% select(id_Dem768_511_HP, c(starts_with(c("A05")) ))
+df5A <- df5A %>% select(-starts_with(c("A05N_CONFIG","A05N_NOI", "A05N_SEXE_", "A05N_JNAIS", "A05N_MNAIS","A05N_ANAIS", "A05N_AGE_", "A05N_ADATDEPART", "A05N_CAUSEDEPART", "A05N_SEPAR_", "A05N_LIENTYP", "A05N_DIPLOM", "A05N_TYPOLOG_", "A05N_TYPLOGCO", "A05N_CDI", "A05N_DISP", "A05N_JOUFRA",
+                                         
+                                         "A05R_CONFIG","A05R_NOI", "A05R_SEXE_", "A05R_JNAIS", "A05R_MNAIS","A05R_ANAIS", "A05R_AGE_", "A05R_ADATDEPART", "A05R_CAUSEDEPART", "A05R_SEPAR_", "A05R_LIENTYP", "A05R_TYPOLOG_", "A05R_TYPLOGCO", "A05R_CDI", "A05R_DISP", "A05R_AHABFRC", "A05R_SCOLARITE", "A05R_DIPLOM1E_", "A05R_MINIKID", "A05R_DIPLOM", "A05R_JOUFRA",
+                                         
+                                         "A05R2_CONFIG","A05R2_NOI", "A05R2_SEXE_", "A05R2_JNAIS", "A05R2_MNAIS","A05R2_ANAIS", "A05R2_AGE_", "A05R2_ADATDEPART", "A05R2_CAUSEDEPART", "A05R2_SEPAR_", "A05R2_TYPOLOG_", "A05R2_TYPLOGCO", "A05R2_CDI", "A05R2_DISP", "A05R2_LIENTYP", "A05R2_DIPLOM", "A05R2_JOUFRA", "A05R2_AHABFRC", "A05R2_SCOLARITE", "A05R2_DIPLOM1E_", "A05R2_MINIKID",
+                                         
+                                       "A05C_CONFIG","A05C_NOI", "A05C_SEXE_", "A05C_JNAIS", "A05C_MNAIS","A05C_ANAIS", "A05C_AGE_", "A05C_ADATDEPART", "A05C_CAUSEDEPART", "A05C_SEPAR_", "A05C_TYPOLOG_", "A05C_TYPLOGCO", "A05C_CDI", "A05C_DISP", "A05C_SCOLARITE", "A05C_DIPLOM1E_", "A05C_MINIKID", "A05C_ETUDES_", "A05C_DIPLOM", "A05C_JOUFRA")))
+
+
+
+df5A <- df5A %>% select(-A05N_SEXENF,-A05N_ETAMATRI, -A05N_QMARPACS,-A05N_ORGAGAL, -A05N_TYPQST, -A05N_VAGUE, -A05N_AIMEC, -A05N_AIMMA, -A05N_MARCHEC, -A05N_RMAITRE, -A05N_SMAITRE, -A05N_SIMAITRE, -A05N_RVMAITRE, -A05N_PARELEPR, -A05N_SCOMPA, -A05N_SCOMPM, -A05N_NERV, -A05N_DESESP, -A05N_AGIT,-A05N_DEPRIM, -A05N_EFFORT, -A05N_RIEN, -A05N_COPAIN, -A05N_MEILAMI, -A05N_FETANNIV, -A05N_NBGAR, -A05N_NBFILLE, -A05N_INQUIFRA, -A05N_JALOUFRA, -A05N_JALOUENF, -A05N_ENFVOI_J, -A05N_SITPAR, -A05N_EFVITPAR, -A05N_ENFVOIPAR, -A05N_FQVOI, -A05N_SEPARCHOI, -A05R_PARTICIP, -A05R2_PARTICIP, -A05R_SITPAR, -A05R2_SITPAR, -A05R2_LIMIT, -A05R2_MALCHR, -A05R_AGE5A, -A05R_AGE5AJR,
+                          
+                          
+                          -A05R_SEXENF,-A05R_ORGAGAL, -A05R_VAGUE, -A05R_TYPQST, -A05R_AIMEC, -A05R_AIMMA, -A05R_MARCHEC, -A05R_RMAITRE, -A05R_SMAITRE, -A05R_SIMAITRE, -A05R_RVMAITRE, -A05R_PARELEPR, -A05R_NERV, -A05R_DESESP, -A05R_AGIT,-A05R_DEPRIM, -A05R_EFFORT, -A05R_RIEN, -A05R_COPAIN, -A05R_MEILAMI,  -A05R_INQUIFRA, -A05R_JALOUFRA, -A05R_JALOUENF, -A05R_EPIPAGE, -A05R_TECLASEC, -A05R_SOUT1, -A05R_SOUT2, -A05R_SOUTECP3, -A05R_EMECOP, -A05R_CHECOP, -A05R_LIMTFILM, -A05R_INTERFILM, -A05R_ACPREF, -A05R_IMPERACTIV, -A05R_PREFACTIV, -A05R_PREFACTIVP, -A05R_VACAVEC, -A05R_NRVACAVEC, -A05R_LIMIT, -A05R_MALCHR, -A05R_ENERGIQ,-A05R_CALM,-A05R_ATTENT, -A05R_ADROIT, -A05R_ENDUR, -A05R_SPORTIF, -A05R_BILDERAPP, -A05R_AGITE, -A05R_PLAINT, -A05R_CRISES, -A05R_SOLITA, -A05R_OBEIS, -A05R_INQUIE, -A05R_NTIENTP, -A05R_AAMI, -A05R_BAGAR, -A05R_PLEURE, -A05R_ESTAIME, -A05R_DISTRA, -A05R_ANXIEU, -A05R_MENTTRI, -A05R_HARCEL, -A05R_REFLECH, -A05R_VOLEMA, -A05R_PREADUL, -A05R_PEURFREQ, -A05R_ATTENTI, -A05R_Q_cohab,
+                          
+                          -A05R2_SEXENF, -A05R2_ORGAGAL,-A05R2_VAGUE, -A05R2_TYPQST, -A05R2_AIMEC, -A05R2_AIMMA, -A05R2_MARCHEC, -A05R2_RMAITRE, -A05R2_SMAITRE, -A05R2_SIMAITRE, -A05R2_RVMAITRE, -A05R2_PARELEPR, -A05R2_EPIPAGE, -A05R2_NERV, -A05R2_DESESP, -A05R2_AGIT,-A05R2_DEPRIM, -A05R2_EFFORT, -A05R2_RIEN, -A05R2_COPAIN, -A05R2_MEILAMI, -A05R2_BILDERAPP, -A05R2_INQUIFRA, -A05R2_JALOUFRA, -A05R2_JALOUENF, -A05R2_TECLASEC, -A05R2_SOUT1, -A05R2_SOUT2, -A05R2_SOUTECP3, -A05R2_EMECOP,-A05R2_CHECOP, -A05R2_LIMTFILM, -A05R2_INTERFILM, -A05R2_ACPREF, -A05R2_IMPERACTIV, -A05R2_PREFACTIV, -A05R2_PREFACTIVP, -A05R2_VACAVEC, -A05R2_NRVACAVEC,  -A05R2_AGITE, -A05R2_PLAINT, -A05R2_CRISES, -A05R2_SOLITA, -A05R2_OBEIS, -A05R2_INQUIE, -A05R2_NTIENTP, -A05R2_AAMI, -A05R2_BAGAR, -A05R2_PLEURE, -A05R2_ESTAIME, -A05R2_DISTRA, -A05R2_ANXIEU, -A05R2_MENTTRI, -A05R2_HARCEL, -A05R2_REFLECH, -A05R2_VOLEMA, -A05R2_PREADUL, -A05R2_PEURFREQ, -A05R2_ATTENTI, -A05R2_ENERGIQ,-A05R2_CALM,-A05R2_ATTENT, -A05R2_ADROIT, -A05R2_ENDUR, -A05R2_SPORTIF, -A05C_AIMEC, -A05C_AIMMA, -A05C_MARCHEC, -A05C_RMAITRE, -A05C_SMAITRE, -A05C_SIMAITRE, -A05C_RVMAITRE, -A05C_PARELEPR,
+                          
+                        -A05C_NERV, -A05C_DESESP, -A05C_AGIT,-A05C_DEPRIM, -A05C_EFFORT, -A05C_RIEN, -A05C_MEILAMI, -A05C_VACAVEC, -A05C_NRVACAVEC, -A05C_ENERGIQ,-A05C_CALM,-A05C_ATTENT, -A05C_ADROIT, -A05C_ENDUR, -A05C_SPORTIF,
+                        
+                          A05R_TOTREVEN, A05R2_TOTREVEN, A05R_TOTREVENT, A05R2_TOTREVENT)
+
+
+## 3.5 years: recoding to get mothers and fathers answers (prefixes for 1st or 2nd parents, without label mother or father directly on the variable name : A03R_ or A03R2).
+
+#A03R_PARTIREF3A : 0/ No participation 1/ The father is the person answering as A03R_ 2/ The mother is the person answering as A03R_
+df3A <- df3A %>%
+  mutate(QUIREP2 = ifelse(A03R_PARTIREF3A == 1, 2, ifelse(A03R_PARTIREF3A==2, 1, 0)))
+
+# Mothers' answers : recoded as A03M_
+mamans3A <- df3A%>%
+  select(starts_with(c("id_Dem768_511_HP", "A03R_", "A03R2_", "QUIREP2"))) %>%
+  filter(QUIREP2 == 1)
+
+colnames(mamans3A) <- gsub("^A03R_", "A03M_", colnames(mamans3A))
+colnames(mamans3A) <- gsub("^A03R2_", "A03P_", colnames(mamans3A))
+
+# Mothers' answers : recoded as A03P_
+
+papas3A <- df3A %>%
+  select(starts_with(c("id_Dem768_511_HP", "A03R_", "A03R2_", "QUIREP2"))) %>%
+  filter(QUIREP2 == 2)
+
+colnames(papas3A) <- gsub("^A03R_", "A03P_", colnames(papas3A))
+colnames(papas3A) <- gsub("^A03R2_", "A03M_", colnames(papas3A))
+
+
+abandon3A <- df3A %>%
+  select(starts_with(c("id_Dem768_511_HP", "A03R_", "A03R2_", "QUIREP2"))) %>%
+  filter(QUIREP2 == 0 | is.na(A03R_PARTIREF3A))
+
+
+colnames(abandon3A) <- gsub("^A03R_", "A03M_", colnames(abandon3A))
+colnames(abandon3A) <- gsub("^A03R2_", "A03P_", colnames(abandon3A))
+
+
+df3A_new <- bind_rows(mamans3A, papas3A, abandon3A)
+df3A <- df3A_new
+
+rm(mamans3A, papas3A, abandon3A, df3A_new)
+
+## 5.5 years: recoding to get mothers and fathers answers (prefixes for 1st or 2nd parents and for cohabitant and non cohabitant, without label mother or father directly on the variable name : A05R_, A05R2_, A05C_, A05N_). 
+
+#Variables allowing identification : A05R_QUIREF (1/ The father is the person answering as A05R_ 2/ The mother is the person answering as A05R_) and "x_QUIREP". 
+
+
+df_PR <- df5A %>%
+  select(starts_with(c("id_Dem768_511_HP", "A05R_"))) %>%
+  filter(A05R_QUIREF == 1 | is.na(A05R_QUIREF))
+
+df_MR <- df5A %>%
+  select(starts_with(c("id_Dem768_511_HP", "A05R_"))) %>%
+  filter(A05R_QUIREF == 2| is.na(A05R_QUIREF))
+
+
+df_PR2 <- df5A %>%
+  select(starts_with(c("id_Dem768_511_HP", "A05R2_"))) %>%
+  filter(A05R2_QUIREP == 1| is.na(A05R2_QUIREP))
+df_MR2 <- df5A %>%
+  select(starts_with(c("id_Dem768_511_HP", "A05R2_"))) %>%
+  filter(A05R2_QUIREP == 2| is.na(A05R2_QUIREP))
+
+df_PC <- df5A %>%
+  select(starts_with(c("id_Dem768_511_HP", "A05C_"))) %>%
+  filter(A05C_QUIREP == 1|A05C_QUIREP == 7| is.na(A05C_QUIREP))
+
+df_MC <- df5A %>%
+  select(starts_with(c("id_Dem768_511_HP", "A05C_"))) %>%
+  filter(A05C_QUIREP == 2| is.na(A05C_QUIREP))
+
+###Removing Non-cohabitant  
+df_PN <- df5A %>%
+  select(starts_with(c("id_Dem768_511_HP", "A05N_"))) %>%
+  filter(A05N_QUIREP == 1 | is.na(A05N_QUIREP)) 
+
+df_MN <- df5A %>%
+  select(starts_with(c("id_Dem768_511_HP", "A05N_"))) %>%
+  filter(A05N_QUIREP == 2 | is.na(A05N_QUIREP))
+
+df_PN <- df_PN %>%
+  mutate_at(vars(-id_Dem768_511_HP), ~ NA)
+df_MN <- df_MN %>%
+  mutate_at(vars(-id_Dem768_511_HP), ~ NA)
+
+
+# Renaming variables
+colnames(df_PR2) <- gsub("^A05R2_", "A05P_", colnames(df_PR2))
+colnames(df_PR) <- gsub("^A05R_", "A05P_", colnames(df_PR))
+colnames(df_PC) <- gsub("^A05C_", "A05P_", colnames(df_PC))
+colnames(df_PN) <- gsub("^A05N_", "A05P_", colnames(df_PN))
+
+colnames(df_MR2) <- gsub("^A05R2_", "A05M_", colnames(df_MR2))
+colnames(df_MR) <- gsub("^A05R_", "A05M_", colnames(df_MR))
+colnames(df_MC) <- gsub("^A05C_", "A05M_", colnames(df_MC))
+colnames(df_MN) <- gsub("^A05N_", "A05M_", colnames(df_MN))
+
+# Creation of father responses dataframe 
+df_P <- merge(df_PR, df_PR2, by = colnames(df_PR), all = TRUE)
+cols_to_merge <- intersect(colnames(df_P), colnames(df_PC))
+df_P  <- merge(df_P , df_PC, by = cols_to_merge, all = TRUE)
+cols_to_merge <- intersect(colnames(df_P), colnames(df_PN))
+df_P  <- merge(df_P , df_PN, by = cols_to_merge, all = TRUE)
+
+# Creation of mother responses dataframe 
+df_M <- merge(df_MR, df_MR2, by = colnames(df_MR), all = TRUE)
+cols_to_merge <- intersect(colnames(df_M), colnames(df_MC))
+df_M  <- merge(df_M , df_MC, by = cols_to_merge, all = TRUE)
+cols_to_merge <- intersect(colnames(df_M), colnames(df_MN))
+df_M  <- merge(df_M , df_MN, by = cols_to_merge, all = TRUE)
+
+# Removing duplicates
+df_Pfiltre <- df_P[!duplicated(df_P$id_Dem768_511_HP) | (!is.na(df_P$A05P_QUIREP) & !duplicated(df_P$id_Dem768_511_HP)), ]
+
+df_Mfiltre <- df_M[!duplicated(df_M$id_Dem768_511_HP) | (!is.na(df_M$A05M_QUIREP) & !duplicated(df_M$id_Dem768_511_HP)), ]
+
+index <- which(df_Pfiltre$A05P_QUIREP == 7)
+id <- df_Pfiltre %>%  
+  slice(index) %>%  
+  pull(id_Dem768_511_HP)
+
+index <- which(df_Pfiltre$A05P_QUIREP == 7 & !is.na(df_Pfiltre$A05P_QUIREP))
+df_Pfiltre[index, -1] <- NA
+
+# Dataframe with mother and father answers
+df5A <- merge(df_Mfiltre, df_Pfiltre, by= "id_Dem768_511_HP")
+
+EQR5A <- dataEQR12 %>% select(id_Dem768_511_HP, CoupleMatri_R_5y)
+df5A <- merge(df5A, EQR5A, by = "id_Dem768_511_HP")
+
+rm(df_Pfiltre, df_Mfiltre, df_P, df_M, df_PR, df_MR, df_PR2, df_MR2, df_MC, df_PC, df_PN, df_MN, EQR5A)
+
+```
+
+#4/ Control variables :
+
+```{r}
+# We use as covariates : mother education, father education, income 3A, income 5A:
+
+# Importation education variables 
+dataEQR12 <- dataEQR12 %>% select(id_Dem768_511_HP, meduc_5y, feduc_5y)
+dataEQR12 <- dataEQR12 %>%
+  filter(!(id_Dem768_511_HP %in% id_homosex))
+
+# Importation income variables
+reven3 <- df3A %>% select(id_Dem768_511_HP, A03M_TOTREVEN, A03P_TOTREVEN)
+reven5 <- df5A %>% select(id_Dem768_511_HP, A05M_TOTREVEN, A05P_TOTREVEN)
+
+
+df_control <- merge(reven3, reven5, by = "id_Dem768_511_HP")
+df_control <- merge(df_control, dataEQR12, by = "id_Dem768_511_HP")
+#Note : on prend les 
+
+
+rm(reven3, reven5)
+
+# Removing non answers such as "I don't know", or "Don't want to answer"
+df_control <- df_control %>% 
+  mutate(A03M_TOTREVEN = case_when(A03M_TOTREVEN == 888888 ~ NA,
+                                   A03M_TOTREVEN == 999999 ~ NA,
+                                   A03M_TOTREVEN == 99999 ~ NA,
+                                   TRUE ~ A03M_TOTREVEN),
+         A03P_TOTREVEN = case_when(A03P_TOTREVEN == 888888 ~ NA,
+                                   A03P_TOTREVEN == 999999 ~ NA,
+                                   TRUE ~ A03P_TOTREVEN),
+         A05M_TOTREVEN = case_when(A05M_TOTREVEN == 888888 ~ NA,
+                                   A05M_TOTREVEN == 999999 ~ NA,
+                                   TRUE ~ A05M_TOTREVEN),
+         A05P_TOTREVEN = case_when(A05P_TOTREVEN == 888888 ~ NA,
+                                   A05P_TOTREVEN == 999999 ~ NA,
+                                   TRUE ~ A05P_TOTREVEN))
+
+# Average household income
+df_control$A3_TOTREVEN <- rowMeans(df_control[, c("A03M_TOTREVEN", "A03P_TOTREVEN")], na.rm = TRUE)
+df_control$A5_TOTREVEN <- rowMeans(df_control[, c("A05M_TOTREVEN", "A05P_TOTREVEN")], na.rm = TRUE)
+
+df_control <- df_control %>% select(-A03M_TOTREVEN, -A03P_TOTREVEN, -A05M_TOTREVEN, -A05P_TOTREVEN)
+
+
+#  Cutoff to remove outliers = mean + 4SD (on log(income))
+df_control$A3_TOTREVEN [log(df_control$A3_TOTREVEN )>
+                    mean(log(df_control$A3_TOTREVEN ), na.rm=TRUE)+4*sd(log(df_control$A3_TOTREVEN ), na.rm=TRUE)] <- NA
+
+df_control$A5_TOTREVEN[log(df_control$A5_TOTREVEN)>
+                    mean(log(df_control$A5_TOTREVEN), na.rm=TRUE)+4*sd(log(df_control$A5_TOTREVEN), na.rm=TRUE)] <- NA
+
+
+df_control$A3_TOTREVEN <- ifelse(is.nan(df_control$A3_TOTREVEN), NA, df_control$A3_TOTREVEN)
+df_control$A5_TOTREVEN <- ifelse(is.nan(df_control$A5_TOTREVEN), NA, df_control$A5_TOTREVEN)
+
+```
+
+#5/ Selecting Gendered family organization variables
+
+```{r}
+  
+  dfGFO <- data1 %>%select(id_Dem768_511_HP, SEXE_ENF, M02M_CHANGB, M02M_MANGB, M02M_COUCHB, M02M_LAVB, M02M_PROMB, M02M_NUITPLEU, M02M_MEDB, M02M_VAISS, M02M_COURSES, M02M_REPAS, M02M_LINGE, M02M_MENAGE, M02M_REPAR,
+                             M02P_CHANGB, M02P_MANGB, M02P_COUCHB, M02P_LAVB, M02P_PROMB, M02P_NUITPLEU, M02P_MEDB, M02P_VAISS, M02P_COURSES, M02P_REPAS, M02P_LINGE, M02P_MENAGE, M02P_REPAR,
+                             
+                           A02M_MANGB, A02M_COUCHB, A02M_LAVB, A02M_NUITPLEU, A02M_QCHERCH, A02M_VAISS, A02M_COURSES, A02M_REPAS, A02M_LINGE, A02M_MENAGE, A02M_REPAR, A02M_TACHMEN,
+                             A02P_MANGB, A02P_COUCHB, A02P_LAVB, A02P_NUITPLEU, A02P_QCHERCH, A02P_VAISS, A02P_COURSES, A02P_REPAS, A02P_LINGE, A02P_MENAGE, A02P_REPAR, A02P_TACHMEN)
+
+
+df3A_GFO <- df3A %>% select (id_Dem768_511_HP, A03M_CHOIVET, A03M_QHABILLE, A03M_QLAVDENT, A03M_EMECO1, A03M_EMECO2, A03M_CHECO1, A03M_CHECO2,
+                             
+                            A03P_CHOIVET, A03P_QHABILLE, A03P_QLAVDENT, A03P_EMECO1, A03P_EMECO2, A03P_CHECO1, A03P_CHECO2)
+
+
+df5A_GFO <- df5A %>% select (id_Dem768_511_HP, A05M_EMECO, A05M_CHECO, A05M_VAISS, A05M_COURSES, A05M_REPAS, A05M_LINGE, A05M_MENAGE, A05M_REPAR, A05M_LAVB, A05M_CHOIVET, A05M_QHABILLE, A05M_QCOIFFE, A05M_QLAVDENT, 
+                            A05P_EMECO, A05P_CHECO, A05P_VAISS, A05P_COURSES, A05P_REPAS, A05P_LINGE, A05P_MENAGE, A05P_REPAR, A05P_LAVB, A05P_CHOIVET, A05P_QHABILLE, A05P_QCOIFFE, A05P_QLAVDENT)
+
+dfGFO <- merge(dfGFO, df3A_GFO, by = "id_Dem768_511_HP")
+dfGFO <- merge(dfGFO, df5A_GFO, by = "id_Dem768_511_HP")
+colnames(dfGFO)[2] <- "SEXE_ELFE"
+
+dfGFO <- dfGFO %>%
+  filter(!(id_Dem768_511_HP %in% id_homosex)) 
+
+# write.csv(dfGFO, file="dfGFO")
+
+rm(df3A_GFO, df5A_GFO)
+```
+
+#6/ Selecting Gendered activities variables
+
+```{r}
+
+dfGA <- data1%>% select(
+"id_Dem768_511_HP",  "SEXE_ENF",         "A01M_ACTIJEU",     
+  "A01M_ACTILECT",     "A01M_ACTIDES",      "A01M_ACTITV",      
+  "A01M_ACTICALM",     "A01M_ACTICHAN",     "A01M_ACTICOR",     
+"A01M_JPOUP",        "A01M_JVOIT",        "A01M_JBAL",        
+"A01M_JLIV",         "A01M_JCONS",        "A01M_JEVEIL"  ,    
+  "A01M_JMUZ"    ,     "A01M_JDIS"     ,    "A01P_ACTIJEU"  ,   
+"A01P_ACTILECT",     "A01P_ACTIDES"   ,   "A01P_ACTITV"    ,  
+ "A01P_ACTICALM",     "A01P_ACTICHAN" ,    "A01P_ACTICOR"   ,  
+  "A01P_JPOUP"   ,     "A01P_JVOIT"   ,     "A01P_JBAL"      ,  
+ "A01P_JLIV"      ,   "A01P_JCONS"     ,   "A01P_JEVEIL"      ,
+ "A01P_JMUZ"       ,  "A01P_JDIS"      ,   "A02M_JOCCBB"      ,
+ "A02M_JCUIS"       , "A02M_JCOND"    ,    "A02M_JBEAU"       ,
+ "A02M_JBALLE"       ,"A02M_JDESS"    ,    "A02M_JEMPIL"      ,
+ "A02M_JEMBOIT"   ,   "A02M_JPUZZLE"  ,    "A02M_JPELUCH"     ,
+ "A02M_JPOUP"      ,  "A02M_JVOIT"    ,    "A02M_JBAIN"       ,
+ "A02M_JPROM"       , "A02M_JACTP"    ,    "A02M_JORDI"       ,
+ "A02M_JSMART"       ,"A02M_JVIDEO"   ,    "A02M_JPARREP"    ,   
+"A02P_JOCCBB"      ,
+ "A02P_JCUIS" ,       "A02P_JCOND"    ,    "A02P_JBEAU"       ,
+ "A02P_JBALLE" ,      "A02P_JDESS"  ,      "A02P_JEMPIL"      ,
+ "A02P_JEMBOIT" ,     "A02P_JPUZZLE" ,     "A02P_JPELUCH"     ,
+"A02P_JPOUP"     ,   "A02P_JVOIT"   ,     "A02P_JBAIN"       ,
+ "A02P_JPROM"     ,   "A02P_JACTP"  ,      "A02P_JORDI"       ,
+"A02P_JSMART"      , "A02P_JVIDEO" )
+
+dfGA_3A <- df3A %>% select(id_Dem768_511_HP, "A03M_ACEXTRASC"   ,
+ "A03M_ACEXTRASCP1",  "A03M_ACEXTRASCP2",  "A03M_ACEXTRASCP3" ,
+ "A03M_ACEXTRASCP4",  "A03M_ACEXTRASCP5" , "A03M_ACEXTRASCP6" ,
+ "A03M_ACEXTRASCP7",  "A03M_ACEXTRASCP8",
+ "A03M_ACT1"      ,   "A03M_ACT2"       ,  "A03M_ACT3"        ,
+ "A03M_ACT4"       ,  "A03M_ACT5"       ,  "A03M_ACT6"        ,
+ "A03M_ACT7"        , "A03P_ACEXTRASC"  ,  "A03P_ACEXTRASCP1" ,
+ "A03P_ACEXTRASCP2"  ,"A03P_ACEXTRASCP3",  "A03P_ACEXTRASCP4" ,
+ "A03P_ACEXTRASCP5",  "A03P_ACEXTRASCP6",  "A03P_ACEXTRASCP7" ,
+ "A03P_ACEXTRASCP8",  "A03P_ACT1"        ,
+ "A03P_ACT2"      ,   "A03P_ACT3"       ,  "A03P_ACT4"        ,
+ "A03P_ACT5"      ,   "A03P_ACT6"       ,  "A03P_ACT7"        )
+
+dfGA_5A <- df5A%>%select( id_Dem768_511_HP,
+"A05M_ACT1"      ,   "A05M_ACT2"       ,  "A05M_ACT3"        ,
+"A05M_ACT4"       ,  "A05M_ACT5"        , "A05M_ACT6"        ,
+ "A05M_ACT7"      ,   "A05M_ACT8"       ,  "A05M_ACT9"        ,
+ "A05M_ACT10"     ,   "A05M_ACT11"      ,  "A05M_ACT12"       ,
+ "A05M_ACT13"     ,   "A05M_ACT14"      ,  "A05M_ACEXTRASC"   ,
+ "A05M_ACEXTRASCP1",  "A05M_ACEXTRASCP2",  "A05M_ACEXTRASCP3" ,
+ "A05M_ACEXTRASCP4" , "A05M_ACEXTRASCP5",  "A05M_ACEXTRASCP6" ,
+ "A05M_ACEXTRASCP7" , "A05M_ACEXTRASCP8" ,
+ "A05M_ACEXTRASCP10", "A05M_JPOUP"      ,  "A05M_JPELUCH"     ,
+ "A05M_JVOIT"       , "A05M_JBAL"       ,  "A05M_JCONS"       ,
+ "A05M_JMUZ"        , "A05M_JSOCART"    ,  "A05M_JEDUC"       ,
+ "A05M_JDEGUIS"     , "A05M_JDINET"     ,  "A05M_JFIGUR"      ,
+ "A05M_REGLIV"     ,  "A05M_LITECRAN"    ,
+ "A05M_ECMUSIQ"     , "A05P_ACT1"       ,  "A05P_ACT2"        ,
+ "A05P_ACT3"        , "A05P_ACT4"       ,  "A05P_ACT5"        ,
+ "A05P_ACT6"        , "A05P_ACT7"       ,  "A05P_ACT8"        ,
+ "A05P_ACT9"        , "A05P_ACT10"      ,  "A05P_ACT11"       ,
+ "A05P_ACT12"       , "A05P_ACT13"      ,  "A05P_ACT14"       ,
+ "A05P_JPOUP"       , "A05P_JPELUCH"    ,  "A05P_JVOIT"       ,
+ "A05P_JBAL"        , "A05P_JCONS"      ,  "A05P_JMUZ"        ,
+ "A05P_JSOCART"     , "A05P_JEDUC"      ,  "A05P_JDEGUIS"     ,
+ "A05P_JDINET"      , "A05P_JFIGUR"     ,
+ "A05P_ACEXTRASC"   , "A05P_ACEXTRASCP1",  "A05P_ACEXTRASCP2" ,
+ "A05P_ACEXTRASCP3" , "A05P_ACEXTRASCP4",  "A05P_ACEXTRASCP5" ,
+ "A05P_ACEXTRASCP6"  ,"A05P_ACEXTRASCP7",  "A05P_ACEXTRASCP8" , "A05P_ACEXTRASCP10", "A05P_REGLIV"      ,
+ "A05P_LITECRAN"    , "A05P_ECMUSIQ" )
+
+dfGA <- merge(dfGA, dfGA_3A, by="id_Dem768_511_HP")
+dfGA <- merge(dfGA, dfGA_5A, by="id_Dem768_511_HP")
+
+colnames(dfGA)[1] <- "id_Dem768_511_HP"
+colnames(dfGA)[2] <- "SEXE_ELFE"
+
+dfGA <- dfGA %>%
+  filter(!(id_Dem768_511_HP %in% id_homosex)) 
+
+# write.csv(dfGA, file="dfGA")
+
+rm(dfGA_3A, dfGA_5A)
+```
+
+
+#7/ GA 
+
+
+## Recoding
+
+```{r}
+
+# Removing the "I don't know"
+var_change <- c(colnames(dfGA))
+
+for (var in var_change) {
+  dfGA[[var]] <- case_when(dfGA[[var]] == 9 ~ NA,
+                           TRUE ~ dfGA[[var]])
+}
+```
+
+## Fusion GA
+
+```{r}
+# We gather fathers' and mothers' answers when possible 
+
+papas <- subset(dfGA, select=grep("^(A01P_|A02P_|A03P_|A05P_)", colnames(dfGA), value=TRUE))
+colnames(papas) <- gsub("^A01P_", "A1_", colnames(papas))
+colnames(papas) <- gsub("^A02P_", "A2_", colnames(papas))
+colnames(papas) <- gsub("^A03P_", "A3_", colnames(papas))
+colnames(papas) <- gsub("^A05P_", "A5_", colnames(papas))
+
+
+mamans <- subset(dfGA, select=grep("^(A01M_|A02M_|A03M_|A05M_)", colnames(dfGA), value=TRUE))
+colnames(mamans) <- gsub("^A01M_", "A1_", colnames(mamans))
+colnames(mamans) <- gsub("^A02M_", "A2_", colnames(mamans))
+colnames(mamans) <- gsub("^A03M_", "A3_", colnames(mamans))
+colnames(mamans) <- gsub("^A05M_", "A5_", colnames(mamans))
+mamans <- mamans[, match(colnames(papas), colnames(mamans))]
+missing_col <- setdiff(colnames(papas), colnames(mamans))
+
+# Value = either mother's or father's, or average if the 2 are available
+
+for (i in 1:ncol(mamans)) {
+  for (j in 1:nrow(mamans)) {
+    if (is.na(mamans[j,i])){
+      mamans[j,i] <- papas[j,i]
+    }
+  }
+}# If NA in mother's answer = we replace it by the father's value 
+
+
+for (i in 1:ncol(mamans)) {
+  for (j in 1:nrow(mamans)) {
+    if (!is.na(papas[j,i])){
+      mamans[j,i] <- mean(c(papas[j,i], mamans[j,i]))
+    }
+  }
+}# If no NA in the father's answer = average of the parents' values 
+
+dfGA <- cbind(dfGA$id_Dem768_511_HP, dfGA$SEXE_ELFE, mamans)
+colnames(dfGA)[1] <- "id_Dem768_511_HP"
+colnames(dfGA)[2] <- "SEXE_ELFE"
+
+rm(papas, mamans)
+
+```
+
+## Counting missing values & removing variables with >50% NA:
+
+```{r, warning=FALSE}
+NA_GA <- data.frame(variable = character(),
+                    nb_NA = integer(),
+                    stringsAsFactors = FALSE)
+
+for (col in names(dfGA)) {
+  nb_NA <- sum(is.na(dfGA[[col]]))
+  NA_GA[nrow(NA_GA) + 1,] <- list(col, nb_NA)
+}
+
+NA_GA <- NA_GA %>% 
+  mutate(age = case_when(startsWith(variable, 'A1') ~ '1 an',
+                         startsWith(variable, 'A2') ~ '2 ans',
+                         startsWith(variable, 'A3') ~ '3 ans',
+                         startsWith(variable, 'A5') ~ '5 ans'))
+
+NA_GA$nb_NA <- NA_GA$nb_NA/6809*100
+
+
+# Removing variables with >50% NA:
+name_col_remove <- character()
+name_col_remove <- NA_GA$variable[NA_GA$nb_NA > 50]
+dfGA <- dfGA[, !names(dfGA) %in% name_col_remove]
+
+rm(NA_GA)
+```
+
+## GA - Calculating cohen's d 
+
+```{r, warning=FALSE}
+
+library(effsize)
+
+# Division by sex
+boys_dfGA <- dfGA[dfGA$SEXE_ELFE == 1, ]
+girls_dfGA <- dfGA[dfGA$SEXE_ELFE == 2, ]
+
+# Empty Dataframe  
+cohen_dfGA <- data.frame(variable = character(),
+                         cohen_test = numeric(),
+                         stringsAsFactors = FALSE)
+
+# Calculating cohen's d of gender differences for each variable
+for (col in names(dfGA[-c(1,2)])) {
+  if(is.numeric(dfGA[[col]])) {
+    cohen_test <- effsize::cohen.d(boys_dfGA[[col]], girls_dfGA[[col]], paired = F, na.rm = TRUE)$estimate
+    cohen_dfGA[nrow(cohen_dfGA) + 1,] <- list(col, cohen_test)
+  }
+}
+
+# Adding the age column
+cohen_dfGA <- cohen_dfGA %>% 
+  mutate(age = case_when(startsWith(variable, 'A1') ~ '1 an',
+                         startsWith(variable, 'A2') ~ '2 ans',
+                         startsWith(variable, 'A3') ~ '3 ans',
+                         startsWith(variable, 'A5') ~ '5 ans'))
+
+# Adding a variable measuring the interval of the cohen's d (absolute value) :
+cohen_dfGA$interval <- cut(abs(cohen_dfGA$cohen_test), breaks = seq(0, 2.1, by = 0.1))
+
+# Threshold of the cohen's d for the varoable to be kept (0.1 here)
+
+cohen_dfGA <- cohen_dfGA %>% 
+  mutate(Seuil = ifelse(interval %in% c("(0,0.1]"), 'd<0.1',ifelse(is.na(interval), 'NA','d>0.1')))  
+
+
+                         
+cohen_dfGA <- slice(cohen_dfGA, -1)
+
+
+rm(boys_dfGA, girls_dfGA)
+
+```
+
+## Keeping Cohen's d > 0,1 for GA :
+
+```{r}
+
+cohen_dfGA_large <- cohen_dfGA[cohen_dfGA$Seuil == "d>0.1",]
+
+selected_vars <- cohen_dfGA %>% 
+  filter(Seuil %in% c("d>0.1")) %>% 
+  pull(variable)
+
+# selecting columns with d>0.1
+dfGA <- dfGA[, c("id_Dem768_511_HP", "SEXE_ELFE", selected_vars)]
+
+# Not selected variables
+not_selected_vars <- cohen_dfGA %>% 
+  filter(Seuil %in% c("d<0.1")) %>% 
+  pull(variable)
+
+rm(cohen_dfGA, cohen_dfGA_large)
+```
+
+## EFA on GA:
+
+```{r}
+dfGA_score <- dfGA %>% select(-id_Dem768_511_HP, -SEXE_ELFE)
+
+# Factor analysis
+
+fa.none_GA <- fa(dfGA_score, nfactors = 1, rotate = "oblimin", fm = "ml")
+
+print("Variance accounted for by the factor out of all the variables")
+fa.none_GA$Vaccounted[2]
+
+fs_GA <- factor.scores(dfGA_score, fa.none_GA, method = "Thurstone", impute =  "mean", missing = T)
+
+dfGA <- cbind(dfGA, scale(fs_GA$scores))
+```
+
+### remove GA score with too many missing data = >50% NA for each ID
+
+```{r}
+ table(rowSums(!is.na(dfGA[,-c(1,2, ncol(dfGA))]))) # = how many missing values for each participant for the variables used to construct GA ? (we remove ID, sex and GA score)
+
+#44 questions. we keep scores based on 22 or more questions (50%)
+sum((rowSums(!is.na(dfGA[,-c(1,2, ncol(dfGA))])))>21) # number with more than 50% responses
+sum((rowSums(!is.na(dfGA[,-c(1,2, ncol(dfGA))])))<22) # number with less than 50% responses
+
+dfGA$`scale(fs_GA$scores)`[rowSums(!is.na(dfGA[,-c(1,2, ncol(dfGA))]))<22] <- NA
+
+```
+
+
+
+#8/ GFO : 
+
+
+## Recoding ( general cases):
+
+```{r}
+
+#1) General case. For these variables: 
+    #7 = "Pas concerné" ("not concerned")-> recoded as NA
+    #6 = "Toujours ou le plus souvent quelqu'un d'autre" ("always or most of the time someone else") -> recoded as 3 = "both mother and father, or someone else"
+
+var_change <- c("M02M_CHANGB", "M02M_MANGB", "M02M_COUCHB", "M02M_LAVB", "M02M_PROMB", "M02M_NUITPLEU", "M02M_MEDB", "M02M_VAISS", "M02M_COURSES", "M02M_REPAS", "M02M_LINGE", "M02M_MENAGE", "M02M_REPAR",
+                "M02P_CHANGB", "M02P_MANGB" , "M02P_COUCHB", "M02P_LAVB", "M02P_PROMB", "M02P_NUITPLEU", "M02P_MEDB", "M02P_VAISS", "M02P_COURSES", "M02P_REPAS", "M02P_LINGE", "M02P_MENAGE", "M02P_REPAR",
+                "A02M_MANGB", "A02M_COUCHB", "A02M_LAVB", "A02M_NUITPLEU", "A02M_QCHERCH", "A02M_VAISS", "A02M_COURSES", "A02M_REPAS", "A02M_LINGE", "A02M_MENAGE", "A02M_REPAR", 
+                "A02P_MANGB", "A02P_COUCHB", "A02P_LAVB", "A02P_NUITPLEU", "A02P_QCHERCH", "A02P_VAISS", "A02P_COURSES", "A02P_REPAS", "A02P_LINGE", "A02P_MENAGE", "A02P_REPAR",
+                "A05M_VAISS", "A05M_COURSES", "A05M_REPAS", "A05M_LINGE", "A05M_MENAGE", "A05M_REPAR", "A05M_LAVB",
+                "A05P_VAISS", "A05P_COURSES", "A05P_REPAS", "A05P_LINGE", "A05P_MENAGE", "A05P_REPAR", "A05P_LAVB")
+
+for (var in var_change) {
+  dfGFO[[var]] <- case_when(dfGFO[[var]] >= 7 ~ NA,
+                            dfGFO[[var]] == 6 ~ 3,
+                           TRUE ~ dfGFO[[var]])
+}
+
+
+# We recode father's answers by inverting them (such that 1= Always the mother, 2= Most often the mother, 3= Both mother and father, or someone else, 4= Most often the father, 5=Always the father)
+
+
+vars <- c("M02P_CHANGB", "M02P_MANGB" , "M02P_COUCHB", "M02P_LAVB", "M02P_PROMB", "M02P_NUITPLEU", "M02P_MEDB", "M02P_VAISS", "M02P_COURSES", "M02P_REPAS", "M02P_LINGE", "M02P_MENAGE", "M02P_REPAR", 
+                "A02P_MANGB", "A02P_COUCHB", "A02P_LAVB", "A02P_NUITPLEU", "A02P_QCHERCH", "A02P_VAISS", "A02P_COURSES", "A02P_REPAS", "A02P_LINGE", "A02P_MENAGE", "A02P_REPAR",
+                "A05P_VAISS", "A05P_COURSES", "A05P_REPAS", "A05P_LINGE", "A05P_MENAGE", "A05P_REPAR", "A05P_LAVB")
+
+
+for (var in vars) {
+  dfGFO[[var]] <- case_when(dfGFO[[var]] == 1 ~ 5,
+                            dfGFO[[var]] == 2 ~ 4,
+                            dfGFO[[var]] == 3 ~ 3,
+                            dfGFO[[var]] == 4 ~ 2,
+                            dfGFO[[var]] == 5 ~ 1,
+                            dfGFO[[var]] == 6 ~ NA,
+                            dfGFO[[var]] == 7 ~ NA,
+                            dfGFO[[var]] == NA ~ NA)
+}
+```
+
+## Recoding (particular cases):
+
+```{r}
+# TACHMEN recoded from 1 to 3 (1 = The mother takes care of most of the chores 2 = Chores are shared 3 = The father takes care of most of the chores)
+# Original variable: When it comes to household chores in your relationship (shopping, cleaning, dishes, laundry, cooking...), do you consider that :
+# 1 = You take care of most of the chores
+# 2 = The chores are shared with your partner
+# 3 = Your spouse does most of the chores
+# 4 = Another person living at home takes care of all household chores
+# 5 = Another person not living in the household takes care of them
+
+dfGFO <- dfGFO %>% 
+  mutate(A02P_TACHMEN = case_when(A02P_TACHMEN == 1 ~ 3,
+                                  A02P_TACHMEN == 3 ~ 1,
+                                  A02P_TACHMEN == 4 ~ 2,
+                                  A02P_TACHMEN == 5 ~ NA, 
+                                     TRUE ~ A02P_TACHMEN),
+         A02M_TACHMEN = case_when(A02M_TACHMEN == 4 ~ 2,
+                                  A02M_TACHMEN == 5 ~ NA,
+                                  TRUE ~ A02M_TACHMEN))
+
+# CHOIVET recoded from 1 to 5:
+# Original variable: This morning, can you tell me who chose [ELFE Child]'s clothes?
+# 1 = He/she alone 
+# 2 = He/she with his/her mother's help
+# 3 = He/she with his/her father's help
+# 4 = He/she with the help of your spouse <= (if there is a LIENTYP(i)_(1à20) =7)
+# 5 = Mother alone
+# 6 = Father alone
+# 7 = Your spouse alone <= (if there is a LIENTYP(i)_(1à20) =7)
+# 8 = Someone else
+# 9 = His/Her clothes were not specially chosen
+# 10 = [Doesn't Know]
+
+dfGFO <- dfGFO %>% 
+  mutate(A03M_CHOIVET = case_when(A03M_CHOIVET == 1 ~ 3,
+                                  A03M_CHOIVET == 2 ~ 2,
+                                  A03M_CHOIVET == 3 ~ 4,
+                                  A03M_CHOIVET == 4 ~ 4,
+                                  A03M_CHOIVET == 5 ~ 1,
+                                  A03M_CHOIVET == 6 ~ 5,
+                                  A03M_CHOIVET == 7 ~ 5,
+                                  A03M_CHOIVET == 8 ~ 3,
+                                  A03M_CHOIVET == 9 ~ 3,
+                                  A03M_CHOIVET >= 10 ~ NA),
+         A03P_CHOIVET = case_when(A03P_CHOIVET == 1 ~ 3,
+                                  A03P_CHOIVET == 2 ~ 2,
+                                  A03P_CHOIVET == 3 ~ 4,
+                                  A03P_CHOIVET == 4 ~ 2,
+                                  A03P_CHOIVET == 5 ~ 1,
+                                  A03P_CHOIVET == 6 ~ 5,
+                                  A03P_CHOIVET == 7 ~ 1,
+                                  A03P_CHOIVET == 8 ~ 3,
+                                  A03P_CHOIVET == 9 ~ 3,
+                                  A03P_CHOIVET >= 10 ~ NA),
+         
+         A05M_CHOIVET = case_when(A05M_CHOIVET == 1 ~ 3,
+                                  A05M_CHOIVET == 2 ~ 2,
+                                  A05M_CHOIVET == 3 ~ 4,
+                                  A05M_CHOIVET == 4 ~ 4,
+                                  A05M_CHOIVET == 5 ~ 1,
+                                  A05M_CHOIVET == 6 ~ 5,
+                                  A05M_CHOIVET == 7 ~ 5,
+                                  A05M_CHOIVET == 8 ~ 3,
+                                  A05M_CHOIVET == 9 ~ 3,
+                                  A05M_CHOIVET >= 10 ~ NA),
+         A05P_CHOIVET = case_when(A05P_CHOIVET == 1 ~ 3,
+                                  A05P_CHOIVET == 2 ~ 2,
+                                  A05P_CHOIVET == 3 ~ 4,
+                                  A05P_CHOIVET == 4 ~ 2,
+                                  A05P_CHOIVET == 5 ~ 1,
+                                  A05P_CHOIVET == 6 ~ 5,
+                                  A05P_CHOIVET == 7 ~ 1,
+                                  A05P_CHOIVET == 8 ~ 3,
+                                  A05P_CHOIVET == 9 ~ 3,
+                                  A05P_CHOIVET >= 10 ~ NA),
+
+# QHABILLE coded same as CHOIVET (without response 9)
+                 
+         A03M_QHABILLE = case_when(A03M_QHABILLE == 1 ~ 3,
+                                  A03M_QHABILLE == 2 ~ 2,
+                                  A03M_QHABILLE == 3 ~ 4,
+                                  A03M_QHABILLE == 4 ~ 4,
+                                  A03M_QHABILLE == 5 ~ 1,
+                                  A03M_QHABILLE == 6 ~ 5,
+                                  A03M_QHABILLE == 7 ~ 5,
+                                  A03M_QHABILLE == 8 ~ 3,
+                                  A03M_QHABILLE >= 9 ~ NA),
+          A03P_QHABILLE = case_when(A03P_QHABILLE == 1 ~ 3,
+                                  A03P_QHABILLE == 2 ~ 2,
+                                  A03P_QHABILLE == 3 ~ 4,
+                                  A03P_QHABILLE == 4 ~ 2,
+                                  A03P_QHABILLE == 5 ~ 1,
+                                  A03P_QHABILLE == 6 ~ 5,
+                                  A03P_QHABILLE == 7 ~ 1,
+                                  A03P_QHABILLE == 8 ~ 3,
+                                  A03P_QHABILLE == 9 ~ NA),
+
+
+         A05M_QHABILLE = case_when(A05M_QHABILLE == 1 ~ 3,
+                                  A05M_QHABILLE == 2 ~ 2,
+                                  A05M_QHABILLE == 3 ~ 4,
+                                  A05M_QHABILLE == 4 ~ 4,
+                                  A05M_QHABILLE == 5 ~ 1,
+                                  A05M_QHABILLE == 6 ~ 5,
+                                  A05M_QHABILLE == 7 ~ 5,
+                                  A05M_QHABILLE == 8 ~ 3,
+                                  A05M_QHABILLE >= 9 ~ NA),
+          A05P_QHABILLE = case_when(A05P_QHABILLE == 1 ~ 3,
+                                  A05P_QHABILLE == 2 ~ 2,
+                                  A05P_QHABILLE == 3 ~ 4,
+                                  A05P_QHABILLE == 4 ~ 2,
+                                  A05P_QHABILLE == 5 ~ 1,
+                                  A05P_QHABILLE == 6 ~ 5,
+                                  A05P_QHABILLE == 7 ~ 1,
+                                  A05P_QHABILLE == 8 ~ 3,
+                                  A05P_QHABILLE == 9 ~ NA),
+
+# QLAVDENT
+# Original varibale : And again this morning, who cleaned [Child ELFE]'s teeth?
+# 1 He/she alone
+# 2 He/she with his/her mother's help
+# 3 He/she with his/her father's help
+# 4 He/she with the help of your spouse <= (if there is a LIENTYP(i)_(1à20)=7)
+# 5 Mother alone
+# 6 Father alone
+# 7 Your spouse alone <= (if there is a LIENTYP(i)_(1à20)=7)
+# 8 Someone else
+# 9 [DK]
+# 10 He/she with the help of mother and father
+# 11 He/she with the help of mother and spouse <= (if there is a LIENTYP(i)_(1à20)=7)
+
+
+         A03M_QLAVDENT = case_when(A03M_QLAVDENT == 1 ~ 3,
+                                  A03M_QLAVDENT == 2 ~ 2,
+                                  A03M_QLAVDENT == 3 ~ 4,
+                                  A03M_QLAVDENT == 4 ~ 4,
+                                  A03M_QLAVDENT == 5 ~ 1,
+                                  A03M_QLAVDENT == 6 ~ 5,
+                                  A03M_QLAVDENT == 7 ~ 5,
+                                  A03M_QLAVDENT == 8 ~ 3,
+                                  A03M_QLAVDENT == 9 ~ NA,
+                                  A03M_QLAVDENT == 10 ~ 3,
+                                  A03M_QLAVDENT == 11 ~ 3,
+                                  A03M_QLAVDENT >= 12 ~ NA),
+        A03P_QLAVDENT = case_when(A03P_QLAVDENT == 1 ~ 3,
+                                  A03P_QLAVDENT == 2 ~ 2,
+                                  A03P_QLAVDENT == 3 ~ 4,
+                                  A03P_QLAVDENT == 4 ~ 2,
+                                  A03P_QLAVDENT == 5 ~ 1,
+                                  A03P_QLAVDENT == 6 ~ 5,
+                                  A03P_QLAVDENT == 7 ~ 1,
+                                  A03P_QLAVDENT == 8 ~ 3,
+                                  A03P_QLAVDENT == 9 ~ NA,
+                                  A03P_QLAVDENT == 10 ~ 3,
+                                  A03P_QLAVDENT == 11 ~ 3,
+                                  A03P_QLAVDENT >= 12 ~ NA),
+
+# At 5 years QLAVDENT differs from QLAVDENT at 3.5 years
+# 10 = He/She never brushes his teeth
+# 11 = [Removed] 
+
+         A05M_QLAVDENT = case_when(A05M_QLAVDENT == 1 ~ 3,
+                                  A05M_QLAVDENT == 2 ~ 2,
+                                  A05M_QLAVDENT == 3 ~ 4,
+                                  A05M_QLAVDENT == 4 ~ 4,
+                                  A05M_QLAVDENT == 5 ~ 1,
+                                  A05M_QLAVDENT == 6 ~ 5,
+                                  A05M_QLAVDENT == 7 ~ 5,
+                                  A05M_QLAVDENT == 8 ~ 3,
+                                  A05M_QLAVDENT == 9 ~ NA,
+                                  A05M_QLAVDENT == 10 ~ 3,
+                                  A05M_QLAVDENT >= 11 ~ NA),
+        A05P_QLAVDENT = case_when(A05P_QLAVDENT == 1 ~ 3,
+                                  A05P_QLAVDENT == 2 ~ 2,
+                                  A05P_QLAVDENT == 3 ~ 4,
+                                  A05P_QLAVDENT == 4 ~ 2,
+                                  A05P_QLAVDENT == 5 ~ 1,
+                                  A05P_QLAVDENT == 6 ~ 5,
+                                  A05P_QLAVDENT == 7 ~ 1,
+                                  A05P_QLAVDENT == 8 ~ 3,
+                                  A05P_QLAVDENT == 9 ~ NA,
+                                  A05P_QLAVDENT == 10 ~ 3,
+                                  A05P_QLAVDENT >= 11 ~ NA),
+
+# QCOIFFE coded as QLAVDENT (10 = Never wears his/her hair)
+
+         A05M_QCOIFFE = case_when(A05M_QCOIFFE == 1 ~ 3,
+                                  A05M_QCOIFFE == 2 ~ 2,
+                                  A05M_QCOIFFE == 3 ~ 4,
+                                  A05M_QCOIFFE == 4 ~ 4,
+                                  A05M_QCOIFFE == 5 ~ 1,
+                                  A05M_QCOIFFE == 6 ~ 5,
+                                  A05M_QCOIFFE == 7 ~ 5,
+                                  A05M_QCOIFFE == 8 ~ 3,
+                                  A05M_QCOIFFE == 9 ~ NA,
+                                  A05M_QCOIFFE == 10 ~ 3,
+                                  A05M_QCOIFFE >= 11 ~ NA),
+          A05P_QCOIFFE = case_when(A05P_QCOIFFE == 1 ~ 3,
+                                  A05P_QCOIFFE == 2 ~ 2,
+                                  A05P_QCOIFFE == 3 ~ 4,
+                                  A05P_QCOIFFE == 4 ~ 2,
+                                  A05P_QCOIFFE == 5 ~ 1,
+                                  A05P_QCOIFFE == 6 ~ 5,
+                                  A05P_QCOIFFE == 7 ~ 1,
+                                  A05P_QCOIFFE == 8 ~ 3,
+                                  A05P_QCOIFFE == 9 ~ NA,
+                                  A05P_QCOIFFE == 10 ~ 3,
+                                  A05P_QCOIFFE >= 11 ~ NA))
+
+
+#CHECO : Who picks him/her up at school most often ?
+#At 3.5 years, the CHECO and EMECO variables are made up of sub-questions. CHECO1/EMECO1 : "you ?", CHECO2/EMECO2 "the other parent ?", CHECO3/EMECO3 "your spouse ?".
+#1 = yes
+#2 = no
+#We computed so that we have one variable indicating if it was mostly done by the mother (1), equally shared (2) or mostly done by the father (3).
+
+dfGFO <- dfGFO %>% 
+  mutate(A03P_CHECO = ifelse(A03P_CHECO1 == 1 & A03P_CHECO2 == 1, 2,
+                    ifelse(A03P_CHECO1 == 1, 3,
+                           ifelse(A03P_CHECO2 == 1, 1, NA))),
+         A03P_EMECO = ifelse(A03P_EMECO1 == 1 & A03P_EMECO2 == 1, 2,
+                    ifelse(A03P_EMECO1 == 1, 3,
+                           ifelse(A03P_EMECO2 == 1, 1, NA))),
+         A03M_CHECO = ifelse(A03M_CHECO1 == 1 & A03M_CHECO2 == 1, 2,
+                    ifelse(A03M_CHECO1 == 1, 1,
+                           ifelse(A03M_CHECO2 == 1, 3, NA))),
+         A03M_EMECO = ifelse(A03M_EMECO1 == 1 & A03M_EMECO2 == 1, 2,
+                    ifelse(A03M_EMECO1 == 1, 1,
+                           ifelse(A03M_EMECO2 == 1, 3, NA))))
+
+
+dfGFO <- dfGFO %>% select(-A03M_CHECO1, -A03M_CHECO2, -A03P_CHECO1, -A03P_CHECO2,
+                          -A03M_EMECO1, -A03M_EMECO2, -A03P_EMECO1, -A03P_EMECO2)
+
+
+# 5.5 years EMECO & CHECO are coded the same way:
+# Original variable: (EMECO) Who most often takes [ELFE child] to school or daycare in the morning? (CHECO) Who picks him/her up at school most often ?
+# 1 You alone
+# 2 The other parent alone
+# 3 Both you and the other parent
+# 4 You and the other parent together
+# 5 Your spouse (if LIENTYP=7)
+# 6 A grandmother or grandfather of [Elf child].
+# 7 Brother or sister
+# 8 Another relative
+# 9 Nursery assistant/nanny
+# 10 Babysitter
+# 11 Neighbor, friend
+# 12 Another person
+# 13 He/she goes alone (he/she goes by bus... etc.)
+
+dfGFO <- dfGFO %>% 
+  mutate(A05M_EMECO = case_when(A05M_EMECO == 1 ~ 1,
+                                A05M_EMECO == 2 ~ 5,
+                                A05M_EMECO == 3 ~ 3,
+                                A05M_EMECO == 4 ~ 3,
+                                A05M_EMECO == 5 ~ 5,
+                                A05M_EMECO >= 6 & A05M_EMECO <= 13 ~ 3,
+                                A05M_EMECO > 13 ~ NA),
+         A05P_EMECO = case_when(A05P_EMECO == 1 ~ 5,
+                                A05P_EMECO == 2 ~ 1,
+                                A05P_EMECO == 3 ~ 3,
+                                A05P_EMECO == 4 ~ 3,
+                                A05P_EMECO == 5 ~ 1,
+                                A05P_EMECO >= 6 & A05P_EMECO <= 13 ~ 3,
+                                A05P_EMECO > 13 ~ NA),
+         A05M_CHECO = case_when(A05M_CHECO == 1 ~ 1,
+                                A05M_CHECO == 2 ~ 5,
+                                A05M_CHECO == 3 ~ 3,
+                                A05M_CHECO == 4 ~ 3,
+                                A05M_CHECO == 5 ~ 5,
+                                A05M_CHECO >= 6 & A05M_CHECO <= 13 ~ 3,
+                                A05M_CHECO > 13 ~ NA),
+         A05P_CHECO = case_when(A05P_CHECO == 1 ~ 5,
+                                A05P_CHECO == 2 ~ 1,
+                                A05P_CHECO == 3 ~ 3,
+                                A05P_CHECO == 4 ~ 3,
+                                A05P_CHECO == 5 ~ 1,
+                                A05P_CHECO >= 6 & A05P_CHECO <= 13 ~ 3,
+                                A05P_CHECO > 13 ~ NA))
+
+
+```
+
+
+##Fusion of mother and father's answers
+
+```{r}
+
+papasGFO <- subset(dfGFO, select=grep("^(M02P_|A01P_|A02P_|A03P_|A05P_)", colnames(dfGFO), value=TRUE))
+colnames(papasGFO) <- gsub("^A0(\\d)P_", "A\\1_", colnames(papasGFO))
+colnames(papasGFO) <- gsub("^M02P", "M2", colnames(papasGFO))
+
+mamansGFO <- subset(dfGFO, select=grep("^(M02M_|A01M_|A02M_|A03M_|A05M_)", colnames(dfGFO), value=TRUE))
+colnames(mamansGFO) <- gsub("^A0(\\d)M_", "A\\1_", colnames(mamansGFO))
+colnames(mamansGFO) <- gsub("^M02M", "M2", colnames(mamansGFO))
+missing_col <- setdiff(colnames(papasGFO), colnames(mamansGFO))
+
+mamans <- mamansGFO
+papas <- papasGFO
+
+# If missing response for the mother, we replace by the father's answer
+for (i in 1:ncol(mamans)) {
+  for (j in 1:nrow(mamans)) {
+    if (is.na(mamans[j,i])){
+      mamans[j,i] <- papas[j,i]
+    }
+  }
+}
+
+# If NO missing response for the father, we average both responses
+for (i in 2:ncol(mamans)-1) {
+  for (j in 1:nrow(mamans)) {
+    if (!is.na(papas[j,i])){
+      mamans[j,i] <- mean(c(mamans[j,i], papas[j,i]), na.rm = T, numeric = T)
+    }
+  }
+}
+
+dfGFO <- cbind(dfGFO$id_Dem768_511_HP, dfGFO$SEXE_ELFE, mamans)
+colnames(dfGFO)[1] <- "id_Dem768_511_HP"
+colnames(dfGFO)[2] <- "SEXE_ELFE"
+
+
+```
+
+## NA check
+
+```{r}
+
+NA_GFO <- data.frame(variable = character(),
+                    nb_NA = integer(),
+                    stringsAsFactors = FALSE)
+for (col in names(dfGFO)) {
+  nb_NA <- sum(is.na(dfGFO[[col]]))
+  NA_GFO[nrow(NA_GFO) + 1,] <- list(col, nb_NA)
+}
+
+NA_GFO <- NA_GFO %>% 
+  mutate(age = case_when(startsWith(variable, 'M2') ~ '2 mois',
+                         startsWith(variable, 'A1') ~ '1 an',
+                         startsWith(variable, 'A2') ~ '2 ans',
+                         startsWith(variable, 'A3') ~ '3 ans',
+                         startsWith(variable, 'A5') ~ '5 ans'))
+
+NA_GFO$nb_NA <- NA_GFO$nb_NA/6809*100
+
+
+#Remove variables with 50% NA : 
+name_col_remove <- character()
+name_col_remove <- NA_GFO$variable[NA_GFO$nb_NA >= 50]
+dfGFO <- dfGFO[, !names(dfGFO) %in% name_col_remove]
+
+
+rm(NA_GFO)
+```
+
+##EFA on GFO:
+
+```{r}
+dfGFO_score <- dfGFO %>% select(-id_Dem768_511_HP, -SEXE_ELFE)
+
+#Factor analysis 
+fa.none_GFO <- fa(dfGFO_score, nfactors = 1, rotate = "oblimin", fm = "ml")
+
+print("Variance accounted for by the factor out of all the variables")
+fa.none_GFO$Vaccounted[2]
+
+fs_GFO <- factor.scores(dfGFO_score, fa.none_GFO, method = "Thurstone", impute =  "mean", missing = T)
+
+dfGFO <- cbind(dfGFO, scale(fs_GFO$scores))
+
+```
+
+### remove GFO score constructed with too much missing data = >50% NA for each ID
+
+```{r}
+ table(rowSums(!is.na(dfGFO[,-c(1,2, ncol(dfGFO))]))) # = how many missing values for each participant for the variables used to construct GA ? (we remove ID, sex and GA score)
+
+#43 questions. we keep only scores based on 22 or more questions (50%)
+sum((rowSums(!is.na(dfGFO[,-c(1,2, ncol(dfGFO))])))>21) #number with more than 50% responses
+sum((rowSums(!is.na(dfGFO[,-c(1,2, ncol(dfGFO))])))<22) #number with less than 50% responses
+
+dfGFO$`scale(fs_GFO$scores)`[rowSums(!is.na(dfGFO[,-c(1,2, ncol(dfGFO))]))<22] <- NA
+
+```
+
+#9/ Final dataframe 
+
+```{r}
+
+school <- read.csv("scoreschool")
+
+# homosexual couples
+school <- school %>%
+  filter(!(id_Dem768_511_HP %in% id_homosex)) 
+
+df_sex <- data1 %>% select(id_Dem768_511_HP, SEXE_ENF)
+df_sex <- df_sex %>% 
+  filter(!(id_Dem768_511_HP %in% id_homosex))
+df_sex$SEXE_ENF <- ifelse(df_sex$SEXE_ENF == 1, -0.5, 0.5)
+df_sex <- df_sex  %>%
+  mutate(sex=case_when(SEXE_ENF == 0.5 ~ "Filles", 
+                          SEXE_ENF == -0.5 ~ "Garçons"))
+colnames(df_sex)[c(2,3)] <- c("Sex", "sexe")
+
+school <- school %>% 
+  select(-X, -classeMS, -classeCP) %>%
+  mutate(scorenum6 = as.numeric(scale(scorenum6)),
+         scorenum4 = as.numeric(scale(scorenum4)),
+         scorelit6 = as.numeric(scale(scorelit6)),
+         scorelit4 = as.numeric(scale(scorelit4))
+         )
+
+GAscore <- dfGA[,c("id_Dem768_511_HP","scale(fs_GA$scores)" )]
+colnames(GAscore)[2] <- "GA"
+GAscore$GA <- as.numeric(scale(GAscore$GA))
+
+GFOscore <- dfGFO[,c("id_Dem768_511_HP","scale(fs_GFO$scores)" )]
+colnames(GFOscore)[2] <- "GFO"
+GFOscore$GFO <- as.numeric(scale(GFOscore$GFO))
+
+school <- merge(school, df_control, by="id_Dem768_511_HP")
+school <- merge(school, df_sex, by="id_Dem768_511_HP")
+school <- merge(school, GAscore, by="id_Dem768_511_HP")
+school <- merge(school, GFOscore, by="id_Dem768_511_HP")
+
+
+```
+
+DATASET:
+```{r}
+# write.csv(school, "database.csv")
+```
+
