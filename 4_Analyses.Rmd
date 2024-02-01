@@ -1,0 +1,885 @@
+---
+title: "Analyses"
+output:
+  pdf_document: default
+  word_document: default
+  html_document: default
+date: "2023-06-02"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+#Library:
+```{r, warning=FALSE}
+
+library(mice)
+library(miceadds)
+library(tidyverse)
+library(haven)
+library(dplyr)
+library(psych)
+library(ggplot2)
+library(viridis)
+library(hrbrthemes)
+library(kableExtra)
+library(forcats)
+library(frequency)
+library(interactions)
+library(corrplot)
+library(effsize)
+library(kableExtra)
+library(gtsummary)
+
+
+school <- read.csv("database.csv")
+school <- school %>%
+  select(-X)
+
+```
+
+```{r load.rdata2}
+
+elfe_mids <- load.Rdata2("ALL_elfe_ecole_imp/ALL_elfe_ecole_imp.Rdata", path=getwd())
+
+```
+
+
+#1/ Descriptive stats (table S3)
+
+```{r results = 'asis'}
+
+library(arsenal)
+
+tab1 <- tableby(Sex ~ meduc_5y + feduc_5y + A5_TOTREVEN + A3_TOTREVEN + scorenum6 + scorenum4 + scorelit6 + scorelit4 + GA + GFO, data = school, control = tableby.control(numeric.stats = c("Nmiss", "meansd",  "medianq1q3"), test = F) )
+
+summary(tab1, digits=2)
+
+
+
+```
+
+
+Dataset of children with a numeracy score in 1st grade
+```{r}
+test  <- complete(elfe_mids,"long",include=T)
+test <- test[!is.na(test$scorenum6),]
+elfe_mids_scorenum6 <- as.mids(test, .id="row")
+```
+
+
+#2/ Cohen d : 
+```{r results = 'asis'}
+
+#Cohen_6_num 
+effsize::cohen.d(data=school, scorenum6 ~ Sex, na.rm = T)
+# Cohen_4_num 
+effsize::cohen.d(data=school, scorenum4 ~ Sex, na.rm = T)
+# Cohen_6_lit 
+effsize::cohen.d(data=school, scorelit6 ~ Sex, na.rm = T)
+# Cohen_4_lit 
+effsize::cohen.d(data= school, scorelit4 ~ Sex, na.rm = T)
+
+```
+
+Cohens'd difference in GFO and GA between boys and girls
+
+```{r}
+
+effsize::cohen.d(elfe_mids_scorenum6$data$GFO~elfe_mids_scorenum6$data$sexe)
+effsize::cohen.d(elfe_mids_scorenum6$data$GA~elfe_mids_scorenum6$data$sexe)
+```
+
+
+
+# Figure 1 : GFO and GA distributions 
+
+```{r}
+df_long <- elfe_mids_scorenum6$data %>%
+  pivot_longer(cols = c(GA, GFO), 
+               names_to = "Type",
+               values_to = "Value")
+
+df_long$Type[df_long$Type=="GA"] <- "Gendered Activities"
+df_long$Type[df_long$Type=="GFO"] <- "Gendered Family Organization"
+
+
+data_plot <- split(df_long, df_long$Type)
+
+my_plot <- function(dat) {
+  
+ggplot(data=dat, aes(x=Value, fill=sexe)) + geom_histogram(position="dodge", bins=20) + 
+  scale_fill_manual(name="Sex",values=c( "#1F78B4","#A6CEE3"),
+                    labels=c("Girls","Boys")) + xlab("Scaled score") + ylab("Count") +
+  theme_bw(base_size=12)+
+  theme(plot.background = element_blank(),
+        panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()) +
+    theme(legend.position = "none")  
+}
+
+plots <- lapply(data_plot, my_plot)
+
+
+plot_legend <- ggplot(df_long, aes(x=Value, fill=sexe)) + geom_histogram(position="dodge", bins=20) + 
+  scale_fill_manual(name="Sex",values=c( "#1F78B4","#A6CEE3"),
+                    labels=c("Girls","Boys")) + xlab("Scaled score") + ylab("Count") +
+  theme_bw(base_size=12)+
+  theme(plot.background = element_blank(),
+        panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank())
+
+grobs <- ggplotGrob(plot_legend)$grobs
+legend <- grobs[[which(sapply(grobs, function(x) x$name) == "guide-box")]]
+
+library(cowplot)
+pgrid <- plot_grid(plots$`Gendered Activities`, plots$`Gendered Family Organization`, labels="AUTO")
+
+
+# add row and column names
+
+# Create empty plots for the labels
+library(patchwork)
+empty <- ggdraw() +
+    draw_label("", x = 0.5, y = 0.5, fontface = "bold") +
+    plot_layout(guides = "collect")
+column_label_plot <- ggdraw() +
+    draw_label("Gendered Activities", x = 0.5, y = 0.5, fontface = "bold") +
+    plot_layout(guides = "collect")
+column_label_plot2 <- ggdraw() +
+    draw_label("Gendered Family Organization", x = 0.5, y = 0.5, fontface = "bold") +
+    plot_layout(guides = "collect")
+
+# Plot grid with labels for both columns and rows
+pgrid <- plot_grid(plots$`Gendered Activities`, plots$`Gendered Family Organization`, labels="AUTO")
+colname <- plot_grid(column_label_plot, column_label_plot2)
+pgrid2 <- plot_grid(colname, pgrid, ncol=1, rel_heights = c(0.2, 1))
+pgrid3 <- plot_grid(pgrid2, legend, ncol = 2, rel_widths = c(1, .1))
+pgrid3
+```
+
+
+# Figure 2 : School scores distributions 
+
+```{r}
+df_long <- elfe_mids$data %>%
+  pivot_longer(cols = c(scorenum6, scorenum4, scorelit6, scorelit4), 
+               names_to = "Type",
+               values_to = "Value")
+
+df_long$Type[df_long$Type=="scorenum6"] <- "1st grade mathematics score"
+df_long$Type[df_long$Type=="scorenum4"] <- "Preschool mathematics score"
+df_long$Type[df_long$Type=="scorelit6"] <- "1st grade literacy score"
+df_long$Type[df_long$Type=="scorelit4"] <- "Preschool literacy score"
+
+data_plot <- split(df_long, df_long$Type)
+
+my_plot <- function(dat) {
+  
+ggplot(data=dat, aes(x=Value, fill=sexe)) + geom_histogram(position="dodge", bins=20) + 
+  scale_fill_manual(name="Sex",values=c( "#1F78B4","#A6CEE3"),
+                    labels=c("Girls","Boys")) + xlab("Scaled score") + ylab("Count") +
+  theme_bw(base_size=12)+
+  theme(plot.background = element_blank(),
+        panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()) +
+    theme(legend.position = "none")  
+}
+
+plots <- lapply(data_plot, my_plot)
+
+
+plot_legend <- ggplot(df_long, aes(x=Value, fill=sexe)) + geom_histogram(position="dodge", bins=20) + 
+  scale_fill_manual(name="Sex",values=c( "#1F78B4","#A6CEE3"),
+                    labels=c("Girls","Boys")) + xlab("Scaled score") + ylab("Count") +
+  theme_bw(base_size=12)+
+  theme(plot.background = element_blank(),
+        panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank())
+
+grobs <- ggplotGrob(plot_legend)$grobs
+legend <- grobs[[which(sapply(grobs, function(x) x$name) == "guide-box")]]
+
+library(cowplot)
+pgrid <- plot_grid(plots$`Preschool mathematics score`, plots$`1st grade mathematics score`, plots$`Preschool literacy score`, plots$`1st grade literacy score`, labels="AUTO")
+#plot_grid(pgrid, legend, ncol = 1, rel_widths = c(1, .1))
+
+
+# add row and column names
+
+# Create empty plots for the labels
+library(patchwork)
+empty <- ggdraw() +
+    draw_label("", x = 0.5, y = 0.5, fontface = "bold") +
+    plot_layout(guides = "collect")
+column_label_plot <- ggdraw() +
+    draw_label("Preschool", x = 0.5, y = 0.5, fontface = "bold") +
+    plot_layout(guides = "collect")
+column_label_plot2 <- ggdraw() +
+    draw_label("1st grade", x = 0.5, y = 0.5, fontface = "bold") +
+    plot_layout(guides = "collect")
+row_label_plot <- ggdraw() +
+    draw_label("Math", x = 0.5, y = 0.3, fontface = "bold", angle=90) +
+    plot_layout(guides = "collect")
+row_label_plot2 <- ggdraw() +
+    draw_label("Literacy", x = 0.5, y = 0.5, fontface = "bold", angle=90) +
+    plot_layout(guides = "collect")
+
+# Plot grid with labels for both columns and rows
+pgrid <- plot_grid(plots$`Preschool mathematics score`, plots$`1st grade mathematics score`, plots$`Preschool literacy score`, plots$`1st grade literacy score`, labels="AUTO")
+colname <- plot_grid(column_label_plot, column_label_plot2)
+pgrid2 <- plot_grid(colname, pgrid, ncol=1, rel_heights = c(0.2, 1))
+rowname <- plot_grid(row_label_plot,row_label_plot2, ncol=1)
+pgrid3 <- plot_grid(rowname, pgrid2, ncol=2, rel_widths = c(0.1, 1))
+pgrid4 <- plot_grid(pgrid3, legend, ncol = 2, rel_widths = c(1, .1))
+pgrid4
+
+
+```
+
+
+# 3/ Regressions for mathematics in 1st grade
+ 
+```{r}
+
+#creation of separate dataset for each school scores (num preschool and 1st grade, lit preschool and 1st grade)
+test  <- complete(elfe_mids,"long",include=T)
+test <- test[!is.na(test$scorenum4),]
+elfe_mids_scorenum4 <- as.mids(test, .id="row")
+
+test  <- complete(elfe_mids,"long",include=T)
+test <- test[!is.na(test$scorelit4),]
+elfe_mids_scorelit4 <- as.mids(test, .id="row")
+
+test  <- complete(elfe_mids,"long",include=T)
+test <- test[!is.na(test$scorelit6),]
+elfe_mids_scorelit6 <- as.mids(test, .id="row")
+
+test  <- complete(elfe_mids,"long",include=T)
+test <- test[!is.na(test$scorenum6),]
+elfe_mids_scorenum6 <- as.mids(test, .id="row")
+
+
+```
+
+
+
+##H1 all (table S4)
+```{r}
+
+reg1 <- with(elfe_mids_scorenum6, 
+             lm(scale(scorenum6) ~ scale(GFO) + Sex + scale(GFO) * Sex + A5_TOTREVEN + meduc_5y + feduc_5y))
+
+
+table1 <- tbl_regression(reg1, label=c(Sex ~ "Sex", 
+                       #GFO ~ "Gendered Family Organization (GFO)",
+                       
+                       meduc_5y ~ "Mother's education ",
+                       feduc_5y ~ "Father's education ",
+                       A5_TOTREVEN ~ "Household’s monthly income at 5 years (€)"))
+table1
+
+
+
+```
+
+## Figure 4
+
+```{r}
+test <- complete(elfe_mids_scorenum6,"long",include=T)
+data <- test[which(test$.imp==2),]
+
+data_graph <- data
+data_graph <- data_graph[!is.na(data_graph$GFO),]
+data_graph$Quartiles <- cut(data_graph$GFO, breaks = quantile(data_graph$GFO, probs = 0:4/4, na.rm = TRUE), labels = FALSE, include.lowest = TRUE)
+data_graph$scorenum6 <- scale(data_graph$scorenum6)
+
+
+result <- data_graph %>%
+  group_by(Quartiles, sexe) %>%
+  summarize(mean_scorenum6 = mean(scorenum6)) %>% 
+  pivot_wider(names_from = sexe, values_from = mean_scorenum6) %>%
+  mutate(Difference = Garçons - Filles)
+
+#### calculating 95 CI for the difference boys-girls
+CI  <- data_graph %>%
+    group_by(Quartiles, sexe) %>%
+    summarize(mean_scorenum6 = mean(scorenum6),sd=sd(scorenum6), N=n())
+pooled_var <- c(      # sp2 = ((n1-1)s12 + (n2-1)s22) / (n1+n2-2)
+  ((CI$N[CI$Quartiles==1 & CI$sexe=="Garçons"]-1)*CI$sd[CI$Quartiles==1 & CI$sexe=="Garçons"]**2 + (CI$N[CI$Quartiles==1 & CI$sexe=="Filles"]-1)*CI$sd[CI$Quartiles==1 & CI$sexe=="Filles"]**2 )/(CI$N[CI$Quartiles==1 & CI$sexe=="Filles"]+CI$N[CI$Quartiles==1 & CI$sexe=="Garçons"]-2),
+  
+  ((CI$N[CI$Quartiles==2 & CI$sexe=="Garçons"]-1)*CI$sd[CI$Quartiles==2 & CI$sexe=="Garçons"]**2 + (CI$N[CI$Quartiles==2 & CI$sexe=="Filles"]-1)*CI$sd[CI$Quartiles==2 & CI$sexe=="Filles"]**2 )/(CI$N[CI$Quartiles==2 & CI$sexe=="Filles"]+CI$N[CI$Quartiles==2 & CI$sexe=="Garçons"]-2),
+  
+  ((CI$N[CI$Quartiles==3 & CI$sexe=="Garçons"]-1)*CI$sd[CI$Quartiles==3 & CI$sexe=="Garçons"]**2 + (CI$N[CI$Quartiles==3 & CI$sexe=="Filles"]-1)*CI$sd[CI$Quartiles==3 & CI$sexe=="Filles"]**2 )/(CI$N[CI$Quartiles==3 & CI$sexe=="Filles"]+CI$N[CI$Quartiles==3 & CI$sexe=="Garçons"]-2),
+  
+  ((CI$N[CI$Quartiles==4 & CI$sexe=="Garçons"]-1)*CI$sd[CI$Quartiles==4 & CI$sexe=="Garçons"]**2 + (CI$N[CI$Quartiles==4 & CI$sexe=="Filles"]-1)*CI$sd[CI$Quartiles==4 & CI$sexe=="Filles"]**2 )/(CI$N[CI$Quartiles==4 & CI$sexe=="Filles"]+CI$N[CI$Quartiles==4 & CI$sexe=="Garçons"]-2)
+  
+)
+
+MOE <- data.frame(Quartiles=c(1,2,3,4), 
+                     MOE=c(
+                       1.96*sqrt(pooled_var[1]/CI$N[CI$Quartiles==1 & CI$sexe=="Garçons"] + pooled_var[1]/CI$N[CI$Quartiles==1 & CI$sexe=="Filles"]),
+                       
+                       1.96*sqrt(pooled_var[1]/CI$N[CI$Quartiles==2 & CI$sexe=="Garçons"] + pooled_var[1]/CI$N[CI$Quartiles==2 & CI$sexe=="Filles"]),
+                       
+                       1.96*sqrt(pooled_var[1]/CI$N[CI$Quartiles==3 & CI$sexe=="Garçons"] + pooled_var[1]/CI$N[CI$Quartiles==3 & CI$sexe=="Filles"]),
+                       
+                       1.96*sqrt(pooled_var[1]/CI$N[CI$Quartiles==4 & CI$sexe=="Garçons"] + pooled_var[1]/CI$N[CI$Quartiles==4 & CI$sexe=="Filles"])
+                       ))
+
+result <- cbind(result, MOE=MOE$MOE)
+
+### plot # 
+ library(RColorBrewer)
+
+ggplot(result, aes(x = as.factor(Quartiles), y = Difference, fill = as.factor(Quartiles))) +
+  geom_bar(stat = "identity") +
+  labs(
+       x = "GFO quartile",
+       y = "Boys/Girls Math Score Difference") +
+  scale_x_discrete( labels=c("First ", "Second ", "Third ", "Fourth ")) +
+  scale_fill_manual(values = c("thistle","#B2DF8A" ,"#FB9A99" , "#FDBF6F")) +
+  guides(fill="none") +
+  theme_minimal() +
+  theme(panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.title.x = element_text(size=12),
+           axis.text.x  = element_text(size=11),
+        axis.title.y = element_text(size=12),
+           axis.text.y  = element_text(size=11),
+        legend.title= element_text(size=12,colour="black"),
+        legend.text= element_text(size=10)) +
+  geom_errorbar(aes(ymin = Difference-MOE, ymax = Difference+MOE,color = as.factor(Quartiles)), width=0.2) +
+  scale_color_manual(values = c("darkslateblue","#33A02C" , "#E31A1C" , "#FF7F00")) +
+  guides(color="none")  + theme(text = element_text(size=13)) 
+```
+
+
+##Post-hoc H1 by sex (table S6)
+```{r}
+
+test  <- complete(elfe_mids_scorenum6,"long",include=T)
+test_girls <- test[test$Sex==0.5,]
+test_boys<- test[test$Sex==-0.5,]
+girls_mids <- as.mids(test_girls, .id="row")
+boys_mids <- as.mids(test_boys, .id="row")
+
+#girls
+reg1_g <- with(girls_mids, 
+             lm(scale(scorenum6) ~ scale(GFO) + A5_TOTREVEN + meduc_5y + feduc_5y))
+# boys
+reg1_b <- with(boys_mids, 
+             lm(scale(scorenum6) ~ scale(GFO) + A5_TOTREVEN + meduc_5y + feduc_5y))
+
+
+table1_g <- tbl_regression(reg1_g, label=c(
+                       #GFO ~ "Gendered Family Organization (GFO)",
+                       
+                       meduc_5y ~ "Mother's education ",
+                       feduc_5y ~ "Father's education ",
+                       A5_TOTREVEN ~ "Household’s monthly income at 5 years (€)"))
+
+table1_b <- tbl_regression(reg1_b, label=c( 
+                       #GFO ~ "Gendered Family Organization (GFO)",
+                       
+                       meduc_5y ~ "Mother's education ",
+                       feduc_5y ~ "Father's education ",
+                       A5_TOTREVEN ~ "Household’s monthly income at 5 years (€)"))
+
+tbl_merge(list(table1_g, table1_b), tab_spanner = c( "**Girls**", "**Boys**"))
+
+
+```
+
+
+
+##H2 all (table S7)
+
+```{r results='asis'}
+reg2 <- with(elfe_mids_scorenum6,
+             lm( scale(GA) ~  scale(GFO) + Sex +  scale(GFO) * Sex + A5_TOTREVEN + meduc_5y + feduc_5y))
+
+table2 <- tbl_regression(reg2, label=c(Sex ~ "Sex", 
+                       #GFO ~ "Gendered Family Organization (GFO)",
+                       
+                       meduc_5y ~ "Mother's education ",
+                       feduc_5y ~ "Father's education ",
+                       A5_TOTREVEN ~ "Household’s monthly income at 5 years (€)"))
+table2
+
+
+```
+
+### GAC (tables S8 and S9)
+
+```{r}
+test  <- complete(elfe_mids_scorenum6,"long",include=T)
+test$GAC <- test$GA
+test$GAC[test$Sex==0.5] <- -test$GA[test$Sex==0.5]
+elfe_mids_scorenum6_GAC <- as.mids(test, .id="row")
+
+reg2_GAC <- with(elfe_mids_scorenum6_GAC,
+             lm( scale(GAC) ~  scale(GFO) + Sex +  scale(GFO) * Sex + A5_TOTREVEN + meduc_5y + feduc_5y))
+
+table2_GAC <- tbl_regression(reg2_GAC, label=c(Sex ~ "Sex", 
+                       #GFO ~ "Gendered Family Organization (GFO)",
+                       
+                       meduc_5y ~ "Mother's education ",
+                       feduc_5y ~ "Father's education ",
+                       A5_TOTREVEN ~ "Household’s monthly income at 5 years (€)"))
+table2_GAC
+
+
+
+### boys girls separately
+
+test  <- complete(elfe_mids_scorenum6_GAC,"long",include=T)
+test_girls <- test[test$Sex==0.5,]
+test_boys<- test[test$Sex==-0.5,]
+girls_mids <- as.mids(test_girls, .id="row")
+boys_mids <- as.mids(test_boys, .id="row")
+
+#girls
+reg_gac_g <- with(girls_mids, 
+             lm( scale(GAC) ~  scale(GFO)  + A5_TOTREVEN + meduc_5y + feduc_5y))
+# boys
+reg_gac_b <- with(boys_mids, 
+             lm( scale(GAC) ~  scale(GFO)  + A5_TOTREVEN + meduc_5y + feduc_5y))
+
+
+table_gac_g <- tbl_regression(reg_gac_g, label=c(
+                       #GFO ~ "Gendered Family Organization (GFO)",
+                       
+                       meduc_5y ~ "Mother's education ",
+                       feduc_5y ~ "Father's education ",
+                       A5_TOTREVEN ~ "Household’s monthly income at 5 years (€)"))
+
+table_gac_b <- tbl_regression(reg_gac_b, label=c( 
+                       #GFO ~ "Gendered Family Organization (GFO)",
+                       
+                       meduc_5y ~ "Mother's education ",
+                       feduc_5y ~ "Father's education ",
+                       A5_TOTREVEN ~ "Household’s monthly income at 5 years (€)"))
+
+tbl_merge(list(table_gac_g, table_gac_b), tab_spanner = c( "**Girls**", "**Boys**"))
+```
+
+### Figure 5
+
+```{r}
+test <- complete(elfe_mids_scorenum6_GAC,"long",include=T)
+data_GAC <- test[which(test$.imp==1),]
+
+
+test_H2_GAC <- lm(scale(GAC)~ GFO + Sex + GFO * Sex +  meduc_5y + feduc_5y + A5_TOTREVEN, data=data_GAC)
+plot_H2_GAC <- interact_plot(test_H2_GAC, pred = GFO, interval = T, partial.residuals = F, modx = Sex, colors = c("#A6CEE3", "#1F78B4"), modx.labels = c("Boys", "Girls"), y.label = "Gendered Activity Congruency", x.label="Gendered Family Organization") +     theme_classic() + theme(text = element_text(size=15)) 
+plot_H2_GAC
+
+```
+
+
+
+
+## H3 - Médiation : 
+
+Sobel test 
+```{r}
+library(powerMediation)
+test  <- complete(elfe_mids,"long",include=T)
+test <- test[!is.na(test$scorenum6),]
+elfe_mids_scorenum6 <- as.mids(test, .id="row")
+
+
+regtotal = with(elfe_mids_scorenum6, lm(scale(scorenum6) ~ Sex + scale(GA) + meduc_5y + A5_TOTREVEN + feduc_5y))
+regmediated = with(elfe_mids_scorenum6, lm(scale(GA) ~ Sex +  meduc_5y + A5_TOTREVEN + feduc_5y))
+total <- summary(pool(regtotal))
+mediated <- summary(pool(regmediated))
+
+testMediation.Sobel(mediated$estimate[2], 
+                    total$estimate[3],
+                    mediated$std.error[2]*sqrt(nobs(regmediated[["analyses"]][[1]])),
+                    total$std.error[3]*sqrt(nobs(regtotal[["analyses"]][[1]])) )
+
+indirectGA <- mediated$estimate[2]*total$estimate[3]
+indirectGA
+
+```
+
+
+```{r}
+tbl_regression(with(elfe_mids_scorenum6, 
+                    lm(scale(scorenum6) ~ Sex + scale(GA) + meduc_5y + A5_TOTREVEN + feduc_5y)),
+               label=c( 
+                       meduc_5y ~ "Mother's education ",
+                       feduc_5y ~ "Father's education ",
+                       A5_TOTREVEN ~ "Household’s monthly income at 5 years (€)"))
+
+tbl_regression(with(elfe_mids_scorenum6, lm(scale(scorenum6) ~ scale(GA) + meduc_5y + A5_TOTREVEN + feduc_5y)), 
+               label=c( 
+                       meduc_5y ~ "Mother's education ",
+                       feduc_5y ~ "Father's education ",
+                       A5_TOTREVEN ~ "Household’s monthly income at 5 years (€)"))
+
+
+
+test  <- complete(elfe_mids_scorenum6,"long",include=T)
+test_girls <- test[test$Sex==0.5,]
+test_boys<- test[test$Sex==-0.5,]
+girls_mids <- as.mids(test_girls, .id="row")
+boys_mids <- as.mids(test_boys, .id="row")
+
+#girls
+reg4_g <- with(girls_mids, 
+             lm(scale(scorenum6) ~  scale(GA) + meduc_5y + A5_TOTREVEN + feduc_5y))
+# boys
+reg4_b <- with(boys_mids, 
+             lm(scale(scorenum6) ~  scale(GA) + meduc_5y + A5_TOTREVEN + feduc_5y))
+
+
+tablereg4_g <- tbl_regression(reg4_g, label=c(
+                       meduc_5y ~ "Mother's education ",
+                       feduc_5y ~ "Father's education ",
+                       A5_TOTREVEN ~ "Household’s monthly income at 5 years (€)"))
+
+tablereg4_b <- tbl_regression(reg4_b, label=c( 
+                       meduc_5y ~ "Mother's education ",
+                       feduc_5y ~ "Father's education ",
+                       A5_TOTREVEN ~ "Household’s monthly income at 5 years (€)"))
+
+tbl_merge(list(tablereg4_g, tablereg4_b), tab_spanner = c( "**Girls**", "**Boys**"))
+
+```
+
+### Figure 
+
+```{r}
+
+library(ggpubr)
+ggplot(data=elfe_mids_scorenum6$data, aes(y=scorenum6, x=GA)) + 
+  geom_point(aes(color= as.factor(Sex)), alpha=0.3) + 
+  geom_smooth(aes(color=as.factor(Sex)), method="lm", alpha=0.8) + 
+    geom_smooth(method="lm", color="red", alpha=0.5, se=FALSE) + 
+  scale_color_manual(name="Sex",values=c( "#1F78B4","#A6CEE3"),labels=c("Boys","Girls"))+ 
+  theme(text = element_text(size=13)) +
+  xlab("Gendered Activities") +
+  ylab("1st grade math test score")+
+  geom_rect(
+    aes(xmin = -1.6, xmax = -0.4, ymin = -3.75, ymax = -2.25),
+    fill = "white", color = "white", alpha=0.1  ) +
+  stat_cor(aes(
+      color = as.factor(Sex),
+      label = after_stat(
+        paste0(
+          "bolditalic(r)~",
+          "bold(`=`)~",
+          "bold('", r, "')~", 
+          "bold(,)~",
+          "bold(p)~",
+          "bold(`=`)~",
+          "bold('", p, "')"
+        )
+      )
+    ),
+
+    p.digits=3,
+    r.digits=1,
+    label.x = -1.5, label.y = c(-3, -3.5),
+  ) + 
+  stat_cor(aes(label = after_stat(
+        paste0("bold(`All:`)~",
+          "bolditalic(r)~",
+          "bold(`=`)~",
+          "bold('", r, "')~", 
+          "bold(,)~",
+          "bold(p)~",
+          "bold(`=`)~",
+          "bold('", round(p,2), "')"
+        )
+      )
+    ),
+    color="red",
+    digits=3,
+    label.x = -1.5, 
+    label.y = -2.5) +     
+  theme_classic() + 
+  theme(text = element_text(size=15)) 
+```
+
+
+##H4 all (table S10)
+
+```{r results='asis'}
+
+reg4 <- with(elfe_mids_scorenum6,
+             lm(scale(scorenum6) ~ Sex +  scale(GFO) +  scale(GFO) * Sex +  scale(GA) + A5_TOTREVEN + meduc_5y + feduc_5y))
+
+table3 <- tbl_regression(reg4, label=c(Sex ~ "Sex", 
+                       #GFO ~ "Gendered Family Organization (GFO)",
+                       #GA ~ "Gendered Activities (GA)",
+                       meduc_5y ~ "Mother's education ",
+                       feduc_5y ~ "Father's education ",
+                       A5_TOTREVEN ~ "Household’s monthly income at 5 years (€)"))
+table3
+
+```
+
+
+
+
+# 4/ For Lit 1st Grade + preschool, and Num preschool
+
+
+## H1 (table S5)
+
+```{r}
+
+### num4
+
+reg5 <- with(elfe_mids_scorenum4, 
+             lm(scale(scorenum4) ~  scale(GFO) + Sex +  scale(GFO) * Sex + A3_TOTREVEN + meduc_5y + feduc_5y))
+
+
+table1_num4 <- tbl_regression(reg5, label=c(Sex ~ "Sex", 
+                       #GFO ~ "Gendered Family Organization (GFO)",
+                       
+                       meduc_5y ~ "Mother's education ",
+                       feduc_5y ~ "Father's education ",
+                       A3_TOTREVEN ~ "Household’s monthly income at 5 years (€)"))
+
+
+### lit6
+reg9 <- with(elfe_mids_scorelit6, 
+             lm( scale(scorelit6) ~  scale(GFO) + Sex +  scale(GFO) * Sex + A5_TOTREVEN + meduc_5y+ feduc_5y))
+
+
+table1_lit6 <- tbl_regression(reg9, label=c(Sex ~ "Sex", 
+                       #GFO ~ "Gendered Family Organization (GFO)",
+                       
+                       meduc_5y ~ "Mother's education ",
+                       feduc_5y ~ "Father's education ",
+                       A5_TOTREVEN ~ "Household’s monthly income at 5 years (€)"))
+
+
+### lit4
+reg13 <- with(elfe_mids_scorelit4, 
+             lm( scale(scorelit4) ~  scale(GFO) + Sex +  scale(GFO) * Sex + A3_TOTREVEN + meduc_5y + feduc_5y))
+
+
+table1_lit4 <- tbl_regression(reg13, label=c(Sex ~ "Sex", 
+                      # GFO ~ "Gendered Family Organization (GFO)",
+                       
+                       meduc_5y ~ "Mother's education ",
+                       feduc_5y ~ "Father's education ",
+                       A3_TOTREVEN ~ "Household’s monthly income at 5 years (€)"))
+
+
+
+tbl_merge(list(table1_num4, table1_lit4, table1_lit6), tab_spanner = c("**Mathematics preschool**","**Literacy preschool**", "**Literacy 1st grade**"))
+
+
+
+
+```
+
+## Figure 3
+
+```{r}
+### num4 old colors c("red3", "magenta4")
+test <- complete(elfe_mids_scorenum4,"long",include=T)
+data_scorenum4 <- test[which(test$.imp==2),]
+data_scorenum4$GFO <- scale(data_scorenum4$GFO)
+
+test_H1_num4 <- lm(scale(scorenum4) ~ GFO + Sex + GFO * Sex +  meduc_5y + feduc_5y + A3_TOTREVEN, data=data_scorenum4)
+plot_H1_num4 <- interact_plot(test_H1_num4, pred = GFO, interval = T, partial.residuals = F, modx = Sex, colors = c("#A6CEE3", "#1F78B4"), modx.labels = c("Boys", "Girls"), y.label = "PS math test score", legend.main = "Sex")  +coord_cartesian(ylim = c(-0.4, 0.4)) +     theme_classic() + xlab("") + theme(legend.position = "none") + ylab("Score") + theme(text = element_text(size=13))
+
+
+### num 6
+test <- complete(elfe_mids_scorenum6,"long",include=T)
+data <- test[which(test$.imp==2),]
+data$GFO <- scale(data$GFO)
+test_H1_num6 <- lm(scale(scorenum6) ~ GFO + Sex + GFO*Sex +  meduc_5y + feduc_5y + A5_TOTREVEN, data=data)
+plot_H1_num6 <- interact_plot(test_H1_num6, pred = GFO, interval = T, partial.residuals = F, modx = Sex, colors = c("#A6CEE3", "#1F78B4"), modx.labels = c("Boys", "Girls"), y.label = "1st grade math test score", legend.main = "Sex") +coord_cartesian(ylim = c(-0.4, 0.4)) +     theme_classic() + xlab("") + theme(legend.position = "none")    + ylab("")  + theme(text = element_text(size=13)) 
+
+
+### lit6
+test <- complete(elfe_mids_scorelit6,"long",include=T)
+data_scorelit6 <- test[which(test$.imp==2),]
+data_scorelit6$GFO <- scale(data_scorelit6$GFO)
+
+test_H1_lit6 <- lm(scale(scorelit6) ~ GFO + Sex + GFO * Sex +  meduc_5y + feduc_5y + A5_TOTREVEN, data=data_scorelit6)
+plot_H1_lit6 <- interact_plot(test_H1_lit6, pred = GFO, interval = T, partial.residuals = F, modx = Sex, colors = c("#A6CEE3", "#1F78B4"), modx.labels = c("Boys", "Girls"), y.label = "1st grade literacy test score", legend.main = "Sex") +coord_cartesian(ylim = c(-0.4, 0.4)) +     theme_classic() + theme(legend.position = "none")  + ylab("")  + xlab("Gendered Family Organization")   + theme(text = element_text(size=13))
+#+ labs(x = expression(paste(italic("More traditional"), "\u2190", "       Gendered Family Organization     ", "\u2192", italic("Less traditional"))) ) 
+
+### lit4
+test <- complete(elfe_mids_scorelit4,"long",include=T)
+data_scorelit4 <- test[which(test$.imp==2),]
+data_scorelit4$GFO <- scale(data_scorelit4$GFO)
+
+test_H1_lit4 <- lm(scale(scorelit4) ~ GFO + Sex + GFO * Sex +  meduc_5y + feduc_5y + A3_TOTREVEN, data=data_scorelit4)
+plot_H1_lit4 <- interact_plot(test_H1_lit4, pred = GFO, interval = T, partial.residuals = F, modx = Sex, colors = c("#A6CEE3", "#1F78B4"), modx.labels = c("Boys", "Girls"), y.label = "PS literacy test score", legend.main = "Sex")  +coord_cartesian(ylim = c(-0.4, 0.4)) +     theme_classic() + theme(legend.position = "none") + ylab("Score")  + xlab("Gendered Family Organization")   + theme(text = element_text(size=13))
+
+
+# adding legend and plot together
+plot_legend <- interact_plot(test_H1_lit4, pred = GFO, interval = T, partial.residuals = F, modx = Sex, colors = c("#A6CEE3", "#1F78B4"), modx.labels = c("Boys", "Girls"), y.label = "PS literacy test score", legend.main = "Sex")  +coord_cartesian(ylim = c(-0.4, 0.4)) +     theme_classic() #+ theme (legend.position="bottom") 
+grobs <- ggplotGrob(plot_legend)$grobs
+legend <- grobs[[which(sapply(grobs, function(x) x$name) == "guide-box")]]
+
+library(cowplot)
+pgrid <- plot_grid(plot_H1_num4, plot_H1_num6, plot_H1_lit4, plot_H1_lit6, labels="AUTO")
+#plot_grid(pgrid, legend, ncol = 1, rel_widths = c(1, .1))
+
+
+# add row and column names
+
+# Create empty plots for the labels
+
+empty <- ggdraw() +
+    draw_label("", x = 0.5, y = 0.5, fontface = "bold") +
+    plot_layout(guides = "collect")
+column_label_plot <- ggdraw() +
+    draw_label("Preschool", x = 0.5, y = 0.5, fontface = "bold") +
+    plot_layout(guides = "collect")
+column_label_plot2 <- ggdraw() +
+    draw_label("1st grade", x = 0.5, y = 0.5, fontface = "bold") +
+    plot_layout(guides = "collect")
+row_label_plot <- ggdraw() +
+    draw_label("Math", x = 0.5, y = 0.3, fontface = "bold", angle=90) +
+    plot_layout(guides = "collect")
+row_label_plot2 <- ggdraw() +
+    draw_label("Literacy", x = 0.5, y = 0.5, fontface = "bold", angle=90) +
+    plot_layout(guides = "collect")
+
+# Plot grid with labels for both columns and rows
+pgrid <- plot_grid(plot_H1_num4, plot_H1_num6, plot_H1_lit4, plot_H1_lit6, labels="AUTO")
+colname <- plot_grid(column_label_plot, column_label_plot2)
+pgrid2 <- plot_grid(colname, pgrid, ncol=1, rel_heights = c(0.2, 1))
+rowname <- plot_grid(row_label_plot,row_label_plot2, ncol=1)
+pgrid3 <- plot_grid(rowname, pgrid2, ncol=2, rel_widths = c(0.1, 1))
+pgrid4 <- plot_grid(pgrid3, legend, ncol = 2, rel_widths = c(1, .1))
+pgrid4
+
+```
+
+
+
+## H3
+Sobel tests
+p>0.9 for all
+
+### Num preschool
+```{r}
+library(powerMediation)
+
+test  <- complete(elfe_mids,"long",include=T)
+test <- test[!is.na(test$scorenum4),]
+elfe_mids_scorenum4 <- as.mids(test, .id="row")
+
+
+regtotal = with(elfe_mids_scorenum4, lm(scale(scorenum4) ~ Sex + scale(GA) + meduc_5y + A3_TOTREVEN + feduc_5y))
+regmediated = with(elfe_mids_scorenum4, lm(scale(GA) ~ Sex +  meduc_5y + A3_TOTREVEN + feduc_5y))
+total <- summary(pool(regtotal))
+mediated <- summary(pool(regmediated))
+
+testMediation.Sobel(mediated$estimate[2], 
+                    total$estimate[3],
+                    mediated$std.error[2]*sqrt(nobs(regmediated[["analyses"]][[1]])),
+                    total$std.error[3]*sqrt(nobs(regtotal[["analyses"]][[1]])) )
+
+indirectGA <- mediated$estimate[2]*total$estimate[3]
+indirectGA
+
+```
+
+### Lit preschool
+```{r}
+test  <- complete(elfe_mids,"long",include=T)
+test <- test[!is.na(test$scorelit4),]
+elfe_mids_scorelit4 <- as.mids(test, .id="row")
+
+
+regtotal = with(elfe_mids_scorelit4, lm(scale(scorelit4) ~ Sex + scale(GA) + meduc_5y + A3_TOTREVEN + feduc_5y))
+regmediated = with(elfe_mids_scorelit4, lm(scale(GA) ~ Sex +  meduc_5y + A3_TOTREVEN + feduc_5y))
+total <- summary(pool(regtotal))
+mediated <- summary(pool(regmediated))
+
+testMediation.Sobel(mediated$estimate[2], 
+                    total$estimate[3],
+                    mediated$std.error[2]*sqrt(nobs(regmediated[["analyses"]][[1]])),
+                    total$std.error[3]*sqrt(nobs(regtotal[["analyses"]][[1]])) )
+
+indirectGA <- mediated$estimate[2]*total$estimate[3]
+indirectGA
+
+```
+
+### Lit 1st grade 
+```{r}
+
+test  <- complete(elfe_mids,"long",include=T)
+test <- test[!is.na(test$scorelit6),]
+elfe_mids_scorelit6 <- as.mids(test, .id="row")
+
+
+regtotal = with(elfe_mids_scorelit6, lm(scale(scorelit6) ~ Sex + scale(GA) + meduc_5y + A5_TOTREVEN + feduc_5y))
+regmediated = with(elfe_mids_scorelit6, lm(scale(GA) ~ Sex +  meduc_5y + A5_TOTREVEN + feduc_5y))
+total <- summary(pool(regtotal))
+mediated <- summary(pool(regmediated))
+
+testMediation.Sobel(mediated$estimate[2], 
+                    total$estimate[3],
+                    mediated$std.error[2]*sqrt(nobs(regmediated[["analyses"]][[1]])),
+                    total$std.error[3]*sqrt(nobs(regtotal[["analyses"]][[1]])) )
+
+indirectGA <- mediated$estimate[2]*total$estimate[3]
+indirectGA
+
+```
+
+
+## H4 (table S11)
+
+```{r}
+
+
+
+
+
+## num4
+reg4num4 <- with(elfe_mids_scorenum4,
+             lm( scale(scorenum4) ~ Sex +  scale(GFO) +  scale(GFO) * Sex +  scale(GA) + A3_TOTREVEN + meduc_5y + feduc_5y))
+
+table3_num4 <- tbl_regression(reg4num4, label=c(Sex ~ "Sex", 
+                       #GFO ~ "Gendered Family Organization (GFO)",
+                       #GA ~ "Gendered Activities (GA)",
+                       meduc_5y ~ "Mother's education ",
+                       feduc_5y ~ "Father's education ",
+                       A3_TOTREVEN ~ "Household’s monthly income at 5 years (€)"))
+
+
+### lit4
+reg4lit4 <- with(elfe_mids_scorelit4,
+             lm( scale(scorelit4) ~ Sex +  scale(GFO) +  scale(GFO) * Sex +  scale(GA) + A3_TOTREVEN + meduc_5y + feduc_5y))
+
+table3_lit4 <- tbl_regression(reg4lit4, label=c(Sex ~ "Sex", 
+                       #GFO ~ "Gendered Family Organization (GFO)",
+                       #GA ~ "Gendered Activities (GA)",
+                       meduc_5y ~ "Mother's education ",
+                       feduc_5y ~ "Father's education ",
+                       A3_TOTREVEN ~ "Household’s monthly income at 5 years (€)"))
+
+### lit6
+reg4lit6 <- with(elfe_mids_scorelit6,
+             lm( scale(scorelit6) ~ Sex +  scale(GFO) +  scale(GFO) * Sex +  scale(GA) + A5_TOTREVEN + meduc_5y+ feduc_5y))
+
+table3_lit6 <- tbl_regression(reg4lit6, label=c(Sex ~ "Sex", 
+                       #GFO ~ "Gendered Family Organization (GFO)",
+                       #GA ~ "Gendered Activities (GA)",
+                       meduc_5y ~ "Mother's education ",
+                       feduc_5y ~ "Father's education ",
+                       A5_TOTREVEN ~ "Household’s monthly income at 5 years (€)"))
+
+
+tbl_merge(list(table3_num4, table3_lit4,table3_lit6  ), tab_spanner = c( "**Mathematics preschool**", "**Literacy preschool**","**Literacy 1st grade**" ))
+```
+
